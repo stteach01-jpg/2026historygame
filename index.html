@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>時間線指揮官</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <section class="topbar" aria-label="遊戲狀態">
+        <div>
+          <p class="eyebrow">時間線指揮官</p>
+          <h1>把歷史事件放回正確時序</h1>
+        </div>
+        <div class="stats">
+          <span id="score">分數 0</span>
+          <span id="streak">連勝 0</span>
+          <span id="best">最佳 0</span>
+        </div>
+      </section>
+
+      <section class="board" aria-live="polite">
+        <article class="event-panel anchor">
+          <span class="region" id="base-region"></span>
+          <h2 id="base-title"></h2>
+          <p class="year" id="base-year"></p>
+          <p id="base-clue"></p>
+        </article>
+
+        <article class="event-panel challenge">
+          <span class="region" id="candidate-region"></span>
+          <h2 id="candidate-title"></h2>
+          <p class="hidden-year">年份待判斷</p>
+          <p id="candidate-clue"></p>
+        </article>
+      </section>
+
+      <section class="controls" aria-label="作答">
+        <button id="earlier" type="button">更早</button>
+        <button id="later" type="button">更晚</button>
+      </section>
+
+      <section class="feedback">
+        <p id="feedback">判斷右側事件比左側事件更早或更晚。</p>
+        <button class="icon-button" id="reset" type="button" aria-label="重新開始" title="重新開始">
+          &#8635;
+        </button>
+      </section>
+
+      <section class="progress">
+        <span aria-hidden="true">&#9733;</span>
+        <span id="round">第 1 回合</span>
+      </section>
+    </main>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
