@@ -6,7 +6,7 @@
 專案用途：歷史事件排序與班級互動教學遊戲
 主要工作目錄：G:\我的雲端硬碟\2026historygame
 GitHub repo：待建立
-預設 branch：main
+預設 branch：master（待 Git 鎖檔釋放後改為 main）
 
 ## Obsidian 對應筆記
 
