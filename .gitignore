@@ -27,3 +27,6 @@ build/
 
 # Log
 *.log
+
+# 使用者提供的課本 PDF，不納入 repo
+電子課本/

@@ -3,56 +3,81 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>時間線指揮官</title>
+    <title>歷史大富翁</title>
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>
     <main class="game-shell">
       <section class="topbar" aria-label="遊戲狀態">
         <div>
-          <p class="eyebrow">時間線指揮官</p>
-          <h1>把歷史事件放回正確時序</h1>
+          <p class="eyebrow">國中歷史一到三年級</p>
+          <h1>歷史大富翁</h1>
         </div>
         <div class="stats">
-          <span id="score">分數 0</span>
-          <span id="streak">連勝 0</span>
-          <span id="best">最佳 0</span>
+          <span id="turn-label">尚未開始</span>
+          <span id="dice-label">骰子 -</span>
+          <span id="round-label">第 0 回合</span>
         </div>
       </section>
 
-      <section class="board" aria-live="polite">
-        <article class="event-panel anchor">
-          <span class="region" id="base-region"></span>
-          <h2 id="base-title"></h2>
-          <p class="year" id="base-year"></p>
-          <p id="base-clue"></p>
-        </article>
-
-        <article class="event-panel challenge">
-          <span class="region" id="candidate-region"></span>
-          <h2 id="candidate-title"></h2>
-          <p class="hidden-year">年份待判斷</p>
-          <p id="candidate-clue"></p>
-        </article>
+      <section class="setup-panel" id="setup-panel" aria-label="玩家登入">
+        <div>
+          <h2>玩家登入</h2>
+          <p>請用班級與座號登入，例如：902-02。只記錄代號，不輸入姓名。</p>
+        </div>
+        <form class="login-form" id="login-form">
+          <input
+            id="player-id"
+            type="text"
+            inputmode="text"
+            autocomplete="off"
+            placeholder="902-02"
+            aria-label="玩家代號"
+            maxlength="6"
+          />
+          <button type="submit">加入</button>
+        </form>
+        <div class="player-list" id="setup-player-list"></div>
+        <p class="setup-message" id="setup-message">加入玩家後開始遊戲。</p>
+        <button class="primary-action" id="start-game" type="button">開始遊戲</button>
       </section>
 
-      <section class="controls" aria-label="作答">
-        <button id="earlier" type="button">更早</button>
-        <button id="later" type="button">更晚</button>
-      </section>
+      <section class="play-layout is-hidden" id="play-layout">
+        <section class="board-wrap" aria-label="36 格歷史大富翁棋盤">
+          <div class="board" id="board"></div>
+        </section>
 
-      <section class="feedback">
-        <p id="feedback">判斷右側事件比左側事件更早或更晚。</p>
-        <button class="icon-button" id="reset" type="button" aria-label="重新開始" title="重新開始">
-          &#8635;
-        </button>
-      </section>
+        <aside class="side-panel" aria-label="遊戲操作">
+          <div class="current-card">
+            <p class="eyebrow">目前玩家</p>
+            <h2 id="current-player">-</h2>
+            <p id="position-label">位置：起點</p>
+          </div>
 
-      <section class="progress">
-        <span aria-hidden="true">&#9733;</span>
-        <span id="round">第 1 回合</span>
+          <button class="roll-button" id="roll-dice" type="button">擲骰子</button>
+
+          <section class="question-card is-hidden" id="question-card" aria-live="polite">
+            <p class="question-meta" id="question-meta"></p>
+            <h2 id="question-title"></h2>
+            <div class="answers" id="answers"></div>
+          </section>
+
+          <section class="message-card">
+            <p id="message">加入玩家後開始遊戲。</p>
+          </section>
+
+          <section class="players-panel">
+            <h2>玩家位置</h2>
+            <div id="player-list"></div>
+          </section>
+
+          <button class="icon-button" id="reset" type="button" aria-label="重新開始" title="重新開始">
+            &#8635;
+          </button>
+        </aside>
       </section>
     </main>
-    <script type="module" src="./src/main.js"></script>
+    <script src="./src/data/questions.js"></script>
+    <script src="./src/main.js"></script>
   </body>
 </html>

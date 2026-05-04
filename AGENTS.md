@@ -3,7 +3,7 @@
 ## 專案入口
 
 專案名稱：2026historygame
-專案用途：歷史事件排序與班級互動教學遊戲
+專案用途：國中歷史大富翁班級互動教學遊戲
 主要工作目錄：G:\我的雲端硬碟\2026historygame
 GitHub repo：待建立
 預設 branch：master（待 Git 鎖檔釋放後改為 main）
@@ -46,7 +46,7 @@ Obsidian vault：G:\我的雲端硬碟\2026codex\secondbrain
 
 入口檔：index.html
 設定檔：package.json
-題庫資料：src/data/events.js
+題庫資料：src/data/questions.js
 主要程式：src/main.js
 樣式：src/styles.css
 部署位置：待建立；若使用 GitHub Pages，優先部署靜態版

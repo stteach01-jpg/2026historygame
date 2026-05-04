@@ -1,110 +1,353 @@
-import { historyEvents } from "./data/events.js";
+const BOARD_SIZE = 36;
+const FINISH = BOARD_SIZE - 1;
+const PLAYER_COLORS = ["#d94f30", "#1f6f8b", "#5f5aa2", "#317b22", "#b45f06", "#7a3e75"];
+const boardQuestions = window.boardQuestions;
 
 const state = {
-  round: 1,
-  score: 0,
-  streak: 0,
-  locked: false,
+  players: [],
+  currentPlayerIndex: 0,
+  round: 0,
+  dice: null,
+  pendingQuestion: null,
+  winner: null,
 };
 
 const elements = {
-  score: document.querySelector("#score"),
-  streak: document.querySelector("#streak"),
-  best: document.querySelector("#best"),
-  round: document.querySelector("#round"),
-  feedback: document.querySelector("#feedback"),
-  earlier: document.querySelector("#earlier"),
-  later: document.querySelector("#later"),
+  setupPanel: document.querySelector("#setup-panel"),
+  playLayout: document.querySelector("#play-layout"),
+  loginForm: document.querySelector("#login-form"),
+  playerId: document.querySelector("#player-id"),
+  setupPlayerList: document.querySelector("#setup-player-list"),
+  setupMessage: document.querySelector("#setup-message"),
+  startGame: document.querySelector("#start-game"),
+  board: document.querySelector("#board"),
+  turnLabel: document.querySelector("#turn-label"),
+  diceLabel: document.querySelector("#dice-label"),
+  roundLabel: document.querySelector("#round-label"),
+  currentPlayer: document.querySelector("#current-player"),
+  positionLabel: document.querySelector("#position-label"),
+  rollDice: document.querySelector("#roll-dice"),
+  questionCard: document.querySelector("#question-card"),
+  questionMeta: document.querySelector("#question-meta"),
+  questionTitle: document.querySelector("#question-title"),
+  answers: document.querySelector("#answers"),
+  message: document.querySelector("#message"),
+  playerList: document.querySelector("#player-list"),
   reset: document.querySelector("#reset"),
-  baseRegion: document.querySelector("#base-region"),
-  baseTitle: document.querySelector("#base-title"),
-  baseYear: document.querySelector("#base-year"),
-  baseClue: document.querySelector("#base-clue"),
-  candidateRegion: document.querySelector("#candidate-region"),
-  candidateTitle: document.querySelector("#candidate-title"),
-  candidateClue: document.querySelector("#candidate-clue"),
 };
 
-function formatYear(year) {
-  return year < 0 ? `西元前 ${Math.abs(year)} 年` : `${year} 年`;
-}
+function boardDisplayOrder() {
+  const rows = [];
 
-function pickRound(seed) {
-  const first = historyEvents[seed % historyEvents.length];
-  let second = historyEvents[(seed * 3 + 4) % historyEvents.length];
-
-  if (first.id === second.id) {
-    second = historyEvents[(seed + 1) % historyEvents.length];
+  for (let row = 5; row >= 0; row -= 1) {
+    const start = row * 6;
+    const cells = Array.from({ length: 6 }, (_, index) => start + index);
+    rows.push(row % 2 === 0 ? cells : cells.reverse());
   }
 
-  return [first, second];
+  return rows.flat();
 }
 
-function getBestStreak() {
-  return Number(localStorage.getItem("historygame-best") || 0);
+function getQuestion(square) {
+  return boardQuestions.find((question) => question.square === square);
 }
 
-function setBestStreak(value) {
-  localStorage.setItem("historygame-best", String(value));
+function getCurrentPlayer() {
+  return state.players[state.currentPlayerIndex];
 }
 
-function render() {
-  const [base, candidate] = pickRound(state.round);
-  const best = Math.max(getBestStreak(), state.streak);
-
-  elements.score.textContent = `分數 ${state.score}`;
-  elements.streak.textContent = `連勝 ${state.streak}`;
-  elements.best.textContent = `最佳 ${best}`;
-  elements.round.textContent = `第 ${state.round} 回合`;
-  elements.earlier.disabled = state.locked;
-  elements.later.disabled = state.locked;
-
-  elements.baseRegion.textContent = base.region;
-  elements.baseTitle.textContent = base.title;
-  elements.baseYear.textContent = formatYear(base.year);
-  elements.baseClue.textContent = base.clue;
-
-  elements.candidateRegion.textContent = candidate.region;
-  elements.candidateTitle.textContent = candidate.title;
-  elements.candidateClue.textContent = candidate.clue;
+function playerLabel(player) {
+  return player.id;
 }
 
-function answer(choice) {
-  if (state.locked) return;
+function normalizePlayerId(value) {
+  return value.trim().toUpperCase();
+}
 
-  const [base, candidate] = pickRound(state.round);
-  const correct = candidate.year < base.year ? "earlier" : "later";
-  const isCorrect = choice === correct;
+function isValidPlayerId(value) {
+  return /^\d{3}-\d{2}$/.test(value);
+}
 
-  state.locked = true;
-  state.streak = isCorrect ? state.streak + 1 : 0;
-  state.score += isCorrect ? 100 + state.streak * 20 : 0;
-  setBestStreak(Math.max(getBestStreak(), state.streak));
+function describeSquare(square) {
+  if (square === 0) return "起點";
+  if (square === FINISH) return "終點";
+  return `第 ${square} 格`;
+}
 
-  elements.feedback.textContent = isCorrect
-    ? `正確：${candidate.title} 是 ${formatYear(candidate.year)}。`
-    : `答錯了：${candidate.title} 是 ${formatYear(candidate.year)}。`;
+function addPlayer(id) {
+  const normalized = normalizePlayerId(id);
 
+  if (!isValidPlayerId(normalized)) {
+    setMessage("請輸入班級與座號，例如 902-02。");
+    return;
+  }
+
+  if (state.players.some((player) => player.id === normalized)) {
+    setMessage(`${normalized} 已經加入。`);
+    return;
+  }
+
+  if (state.players.length >= PLAYER_COLORS.length) {
+    setMessage("目前最多支援 6 位玩家。");
+    return;
+  }
+
+  state.players.push({
+    id: normalized,
+    position: 0,
+    previousPosition: 0,
+    color: PLAYER_COLORS[state.players.length],
+  });
+
+  elements.playerId.value = "";
+  setMessage(`${normalized} 已加入。`);
+  renderSetupPlayers();
+}
+
+function startGame() {
+  if (state.players.length === 0) {
+    setMessage("請至少加入 1 位玩家。");
+    return;
+  }
+
+  state.round = 1;
+  state.currentPlayerIndex = 0;
+  state.dice = null;
+  state.pendingQuestion = null;
+  state.winner = null;
+  elements.setupPanel.classList.add("is-hidden");
+  elements.playLayout.classList.remove("is-hidden");
+  setMessage("輪到第一位玩家擲骰子。");
   render();
+}
 
-  window.setTimeout(() => {
+function rollDice() {
+  const player = getCurrentPlayer();
+
+  if (!player || state.pendingQuestion || state.winner) return;
+
+  const dice = Math.floor(Math.random() * 6) + 1;
+  const from = player.position;
+  const to = Math.min(FINISH, from + dice);
+  const question = getQuestion(to);
+
+  state.dice = dice;
+  player.previousPosition = from;
+  player.position = to;
+  state.pendingQuestion = {
+    playerIndex: state.currentPlayerIndex,
+    from,
+    to,
+    question,
+    choiceOrder: shuffledChoiceOrder(question.choices.length),
+  };
+
+  setMessage(`${playerLabel(player)} 擲出 ${dice}，前進到${describeSquare(to)}。答對才能留在這裡。`);
+  render();
+}
+
+function answerQuestion(choiceIndex) {
+  const pending = state.pendingQuestion;
+  if (!pending) return;
+
+  const player = state.players[pending.playerIndex];
+  const isCorrect = choiceIndex === pending.question.answer;
+
+  if (isCorrect) {
+    if (pending.to === FINISH) {
+      state.winner = player;
+      state.pendingQuestion = null;
+      setMessage(`${playerLabel(player)} 答對終點題，獲勝！`);
+      render();
+      return;
+    }
+
+    setMessage(`答對！${playerLabel(player)} 留在${describeSquare(pending.to)}。${pending.question.explanation}`);
+  } else {
+    player.position = pending.from;
+    setMessage(
+      `答錯，${playerLabel(player)} 退回${describeSquare(pending.from)}。正解：${
+        pending.question.choices[pending.question.answer]
+      }。${pending.question.explanation}`,
+    );
+  }
+
+  state.pendingQuestion = null;
+  advanceTurn();
+  render();
+}
+
+function advanceTurn() {
+  if (state.players.length === 0) return;
+
+  state.currentPlayerIndex = (state.currentPlayerIndex + 1) % state.players.length;
+  if (state.currentPlayerIndex === 0) {
     state.round += 1;
-    state.locked = false;
-    render();
-  }, 900);
+  }
 }
 
 function resetGame() {
-  state.round = 1;
-  state.score = 0;
-  state.streak = 0;
-  state.locked = false;
-  elements.feedback.textContent = "判斷右側事件比左側事件更早或更晚。";
+  state.players = [];
+  state.currentPlayerIndex = 0;
+  state.round = 0;
+  state.dice = null;
+  state.pendingQuestion = null;
+  state.winner = null;
+  elements.setupPanel.classList.remove("is-hidden");
+  elements.playLayout.classList.add("is-hidden");
+  elements.playerId.value = "";
+  setMessage("加入玩家後開始遊戲。");
+  renderSetupPlayers();
   render();
 }
 
-elements.earlier.addEventListener("click", () => answer("earlier"));
-elements.later.addEventListener("click", () => answer("later"));
+function setMessage(message) {
+  elements.message.textContent = message;
+  elements.setupMessage.textContent = message;
+}
+
+function shuffledChoiceOrder(length) {
+  const order = Array.from({ length }, (_, index) => index);
+
+  for (let index = order.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [order[index], order[swapIndex]] = [order[swapIndex], order[index]];
+  }
+
+  return order;
+}
+
+function renderSetupPlayers() {
+  elements.setupPlayerList.innerHTML = "";
+
+  if (state.players.length === 0) {
+    elements.setupPlayerList.innerHTML = '<span class="empty-state">尚未加入玩家</span>';
+    return;
+  }
+
+  state.players.forEach((player) => {
+    const tag = document.createElement("span");
+    tag.className = "player-tag";
+    tag.style.setProperty("--player-color", player.color);
+    tag.textContent = playerLabel(player);
+    elements.setupPlayerList.append(tag);
+  });
+}
+
+function renderBoard() {
+  elements.board.innerHTML = "";
+
+  boardDisplayOrder().forEach((square) => {
+    const cell = document.createElement("div");
+    const question = getQuestion(square);
+    const playersHere = state.players.filter((player) => player.position === square);
+
+    cell.className = "board-cell";
+    if (square === 0) cell.classList.add("start-cell");
+    if (square === FINISH) cell.classList.add("finish-cell");
+    if (state.pendingQuestion?.to === square) cell.classList.add("active-cell");
+
+    const label = document.createElement("span");
+    label.className = "cell-number";
+    label.textContent = square === 0 ? "起點" : square === FINISH ? "終點" : String(square);
+
+    const title = document.createElement("strong");
+    title.textContent = square === 0 ? "登入出發" : question?.unit ?? "歷史挑戰";
+
+    const grade = document.createElement("span");
+    grade.className = "cell-grade";
+    grade.textContent = square === 0 ? "START" : question?.grade ?? "";
+
+    const tokens = document.createElement("div");
+    tokens.className = "tokens";
+    playersHere.forEach((player) => {
+      const token = document.createElement("span");
+      token.className = "token";
+      token.style.setProperty("--player-color", player.color);
+      token.textContent = player.id.slice(-2);
+      tokens.append(token);
+    });
+
+    cell.append(label, title, grade, tokens);
+    elements.board.append(cell);
+  });
+}
+
+function renderQuestion() {
+  const pending = state.pendingQuestion;
+  elements.answers.innerHTML = "";
+
+  if (!pending) {
+    elements.questionCard.classList.add("is-hidden");
+    return;
+  }
+
+  const { question, to } = pending;
+  elements.questionCard.classList.remove("is-hidden");
+  elements.questionMeta.textContent = `${describeSquare(to)}｜${question.grade}｜${question.unit}`;
+  elements.questionTitle.textContent = question.question;
+
+  pending.choiceOrder.forEach((choiceIndex) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = question.choices[choiceIndex];
+    button.addEventListener("click", () => answerQuestion(choiceIndex));
+    elements.answers.append(button);
+  });
+}
+
+function renderPlayers() {
+  elements.playerList.innerHTML = "";
+
+  state.players.forEach((player, index) => {
+    const row = document.createElement("div");
+    row.className = "player-row";
+    if (index === state.currentPlayerIndex && !state.winner) row.classList.add("is-current");
+
+    const dot = document.createElement("span");
+    dot.className = "player-dot";
+    dot.style.setProperty("--player-color", player.color);
+
+    const name = document.createElement("strong");
+    name.textContent = playerLabel(player);
+
+    const position = document.createElement("span");
+    position.textContent = describeSquare(player.position);
+
+    row.append(dot, name, position);
+    elements.playerList.append(row);
+  });
+}
+
+function renderStatus() {
+  const player = getCurrentPlayer();
+
+  elements.turnLabel.textContent = state.winner
+    ? `勝利 ${playerLabel(state.winner)}`
+    : player
+      ? `輪到 ${playerLabel(player)}`
+      : "尚未開始";
+  elements.diceLabel.textContent = state.dice ? `骰子 ${state.dice}` : "骰子 -";
+  elements.roundLabel.textContent = `第 ${state.round} 回合`;
+  elements.currentPlayer.textContent = player ? playerLabel(player) : "-";
+  elements.positionLabel.textContent = player ? `位置：${describeSquare(player.position)}` : "位置：起點";
+  elements.rollDice.disabled = Boolean(state.pendingQuestion || state.winner);
+}
+
+function render() {
+  renderBoard();
+  renderQuestion();
+  renderPlayers();
+  renderStatus();
+}
+
+elements.loginForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  addPlayer(elements.playerId.value);
+});
+elements.startGame.addEventListener("click", startGame);
+elements.rollDice.addEventListener("click", rollDice);
 elements.reset.addEventListener("click", resetGame);
 
+renderSetupPlayers();
 render();
