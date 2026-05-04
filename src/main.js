@@ -9,6 +9,7 @@ const state = {
   round: 0,
   dice: null,
   pendingQuestion: null,
+  usedQuestionKeys: new Set(),
   winner: null,
 };
 
@@ -50,6 +51,29 @@ function boardDisplayOrder() {
 
 function getQuestion(square) {
   return boardQuestions.find((question) => question.square === square);
+}
+
+function questionKey(question, index) {
+  return question.id ?? `${question.square}-${index}-${question.question}`;
+}
+
+function getNextQuestion(square) {
+  const exactSquareCandidates = boardQuestions
+    .map((question, index) => ({ question, key: questionKey(question, index) }))
+    .filter((entry) => entry.question.square === square && !state.usedQuestionKeys.has(entry.key));
+
+  const candidates =
+    exactSquareCandidates.length > 0
+      ? exactSquareCandidates
+      : boardQuestions
+          .map((question, index) => ({ question, key: questionKey(question, index) }))
+          .filter((entry) => !state.usedQuestionKeys.has(entry.key));
+
+  if (candidates.length === 0) return null;
+
+  const picked = candidates[Math.floor(Math.random() * candidates.length)];
+  state.usedQuestionKeys.add(picked.key);
+  return picked.question;
 }
 
 function getCurrentPlayer() {
@@ -114,6 +138,7 @@ function startGame() {
   state.currentPlayerIndex = 0;
   state.dice = null;
   state.pendingQuestion = null;
+  state.usedQuestionKeys = new Set();
   state.winner = null;
   elements.setupPanel.classList.add("is-hidden");
   elements.playLayout.classList.remove("is-hidden");
@@ -129,11 +154,18 @@ function rollDice() {
   const dice = Math.floor(Math.random() * 6) + 1;
   const from = player.position;
   const to = Math.min(FINISH, from + dice);
-  const question = getQuestion(to);
+  const question = getNextQuestion(to);
 
   state.dice = dice;
   player.previousPosition = from;
   player.position = to;
+
+  if (!question) {
+    setMessage("本局題庫已全部使用，請重新開始一局。");
+    render();
+    return;
+  }
+
   state.pendingQuestion = {
     playerIndex: state.currentPlayerIndex,
     from,
@@ -192,6 +224,7 @@ function resetGame() {
   state.round = 0;
   state.dice = null;
   state.pendingQuestion = null;
+  state.usedQuestionKeys = new Set();
   state.winner = null;
   elements.setupPanel.classList.remove("is-hidden");
   elements.playLayout.classList.add("is-hidden");
