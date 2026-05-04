@@ -5,8 +5,8 @@
 專案名稱：2026historygame
 專案用途：國中歷史大富翁班級互動教學遊戲
 主要工作目錄：G:\我的雲端硬碟\2026historygame
-GitHub repo：待建立
-預設 branch：master（待 Git 鎖檔釋放後改為 main）
+GitHub repo：https://github.com/stteach01-jpg/2026historygame
+預設 branch：master
 
 ## Obsidian 對應筆記
 
@@ -19,7 +19,7 @@ Obsidian vault：G:\我的雲端硬碟\2026codex\secondbrain
 ## 工作桌 + 三個家
 
 - 工作桌：G:\我的雲端硬碟\2026historygame
-- GitHub：待建立
+- GitHub：https://github.com/stteach01-jpg/2026historygame
 - Obsidian：G:\我的雲端硬碟\2026codex\secondbrain + 2026historygame/專案工作流程.md
 - Firebase：未使用
 
@@ -49,7 +49,7 @@ Obsidian vault：G:\我的雲端硬碟\2026codex\secondbrain
 題庫資料：src/data/questions.js
 主要程式：src/main.js
 樣式：src/styles.css
-部署位置：待建立；若使用 GitHub Pages，優先部署靜態版
+部署位置：https://stteach01-jpg.github.io/2026historygame/；GitHub Pages 從 `master` 分支根目錄部署靜態版
 
 ## 不要做
 
