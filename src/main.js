@@ -10,6 +10,8 @@ const state = {
   dice: null,
   pendingQuestion: null,
   usedQuestionKeys: new Set(),
+  teacherLog: [],
+  answerRevealed: false,
   winner: null,
 };
 
@@ -25,6 +27,8 @@ const elements = {
   turnLabel: document.querySelector("#turn-label"),
   diceLabel: document.querySelector("#dice-label"),
   roundLabel: document.querySelector("#round-label"),
+  toggleTeacher: document.querySelector("#toggle-teacher"),
+  toggleProjector: document.querySelector("#toggle-projector"),
   currentPlayer: document.querySelector("#current-player"),
   positionLabel: document.querySelector("#position-label"),
   rollDice: document.querySelector("#roll-dice"),
@@ -34,6 +38,20 @@ const elements = {
   answers: document.querySelector("#answers"),
   message: document.querySelector("#message"),
   playerList: document.querySelector("#player-list"),
+  projectionPlayer: document.querySelector("#projection-player"),
+  projectionPosition: document.querySelector("#projection-position"),
+  projectionDice: document.querySelector("#projection-dice"),
+  projectionMeta: document.querySelector("#projection-meta"),
+  projectionQuestion: document.querySelector("#projection-question"),
+  projectionAnswers: document.querySelector("#projection-answers"),
+  projectionAnswer: document.querySelector("#projection-answer"),
+  teacherPanel: document.querySelector("#teacher-panel"),
+  questionCount: document.querySelector("#question-count"),
+  revealAnswer: document.querySelector("#reveal-answer"),
+  markCorrect: document.querySelector("#mark-correct"),
+  markWrong: document.querySelector("#mark-wrong"),
+  forceNext: document.querySelector("#force-next"),
+  teacherLog: document.querySelector("#teacher-log"),
   reset: document.querySelector("#reset"),
 };
 
@@ -139,6 +157,8 @@ function startGame() {
   state.dice = null;
   state.pendingQuestion = null;
   state.usedQuestionKeys = new Set();
+  state.teacherLog = [];
+  state.answerRevealed = false;
   state.winner = null;
   elements.setupPanel.classList.add("is-hidden");
   elements.playLayout.classList.remove("is-hidden");
@@ -173,6 +193,8 @@ function rollDice() {
     question,
     choiceOrder: shuffledChoiceOrder(question.choices.length),
   };
+  state.answerRevealed = false;
+  addTeacherLog(`${playerLabel(player)} 擲出 ${dice}，從${describeSquare(from)}到${describeSquare(to)}。`);
 
   setMessage(`${playerLabel(player)} 擲出 ${dice}，前進到${describeSquare(to)}。答對才能留在這裡。`);
   render();
@@ -182,21 +204,32 @@ function answerQuestion(choiceIndex) {
   const pending = state.pendingQuestion;
   if (!pending) return;
 
-  const player = state.players[pending.playerIndex];
   const isCorrect = choiceIndex === pending.question.answer;
+  resolveQuestion(isCorrect);
+}
+
+function resolveQuestion(isCorrect) {
+  const pending = state.pendingQuestion;
+  if (!pending) return;
+
+  const player = state.players[pending.playerIndex];
 
   if (isCorrect) {
     if (pending.to === FINISH) {
       state.winner = player;
       state.pendingQuestion = null;
+      state.answerRevealed = false;
+      addTeacherLog(`${playerLabel(player)} 答對終點題並獲勝。`);
       setMessage(`${playerLabel(player)} 答對終點題，獲勝！`);
       render();
       return;
     }
 
+    addTeacherLog(`${playerLabel(player)} 答對，停在${describeSquare(pending.to)}。`);
     setMessage(`答對！${playerLabel(player)} 留在${describeSquare(pending.to)}。${pending.question.explanation}`);
   } else {
     player.position = pending.from;
+    addTeacherLog(`${playerLabel(player)} 答錯，退回${describeSquare(pending.from)}。`);
     setMessage(
       `答錯，${playerLabel(player)} 退回${describeSquare(pending.from)}。正解：${
         pending.question.choices[pending.question.answer]
@@ -205,6 +238,38 @@ function answerQuestion(choiceIndex) {
   }
 
   state.pendingQuestion = null;
+  state.answerRevealed = false;
+  advanceTurn();
+  render();
+}
+
+function revealAnswer() {
+  if (!state.pendingQuestion) {
+    setMessage("目前沒有待答題目。");
+    return;
+  }
+
+  state.answerRevealed = true;
+  addTeacherLog(`顯示答案：${state.pendingQuestion.question.choices[state.pendingQuestion.question.answer]}`);
+  render();
+}
+
+function forceNextTurn() {
+  if (state.winner) return;
+
+  if (state.pendingQuestion) {
+    const pending = state.pendingQuestion;
+    const player = state.players[pending.playerIndex];
+    player.position = pending.from;
+    state.pendingQuestion = null;
+    state.answerRevealed = false;
+    addTeacherLog(`${playerLabel(player)} 的題目略過，回到${describeSquare(pending.from)}。`);
+    setMessage(`${playerLabel(player)} 的題目已略過，回到${describeSquare(pending.from)}。`);
+  } else {
+    addTeacherLog("教師手動切換到下一位玩家。");
+    setMessage("已切換到下一位玩家。");
+  }
+
   advanceTurn();
   render();
 }
@@ -225,6 +290,8 @@ function resetGame() {
   state.dice = null;
   state.pendingQuestion = null;
   state.usedQuestionKeys = new Set();
+  state.teacherLog = [];
+  state.answerRevealed = false;
   state.winner = null;
   elements.setupPanel.classList.remove("is-hidden");
   elements.playLayout.classList.add("is-hidden");
@@ -232,6 +299,11 @@ function resetGame() {
   setMessage("加入玩家後開始遊戲。");
   renderSetupPlayers();
   render();
+}
+
+function addTeacherLog(message) {
+  state.teacherLog.unshift(`${new Date().toLocaleTimeString("zh-TW", { hour12: false })} ${message}`);
+  state.teacherLog = state.teacherLog.slice(0, 8);
 }
 
 function setMessage(message) {
@@ -329,6 +401,44 @@ function renderQuestion() {
   });
 }
 
+function renderProjection() {
+  const player = getCurrentPlayer();
+  const pending = state.pendingQuestion;
+  elements.projectionAnswers.innerHTML = "";
+
+  elements.projectionPlayer.textContent = player ? `目前玩家 ${playerLabel(player)}` : "目前玩家 -";
+  elements.projectionPosition.textContent = player ? `位置：${describeSquare(player.position)}` : "位置：起點";
+  elements.projectionDice.textContent = state.dice ? `骰子 ${state.dice}` : "骰子 -";
+
+  if (!pending) {
+    elements.projectionMeta.textContent = state.winner ? "比賽結束" : "等待擲骰";
+    elements.projectionQuestion.textContent = state.winner
+      ? `${playerLabel(state.winner)} 獲勝！`
+      : "請看棋盤與教師操作，輪到玩家時擲骰。";
+    elements.projectionAnswer.classList.add("is-hidden");
+    return;
+  }
+
+  const { question, to } = pending;
+  elements.projectionMeta.textContent = `${describeSquare(to)}｜${question.grade}｜${question.unit}`;
+  elements.projectionQuestion.textContent = question.question;
+
+  pending.choiceOrder.forEach((choiceIndex, displayIndex) => {
+    const choice = document.createElement("div");
+    choice.className = "projection-choice";
+    if (state.answerRevealed && choiceIndex === question.answer) choice.classList.add("is-answer");
+    choice.textContent = `${String.fromCharCode(65 + displayIndex)}. ${question.choices[choiceIndex]}`;
+    elements.projectionAnswers.append(choice);
+  });
+
+  if (state.answerRevealed) {
+    elements.projectionAnswer.classList.remove("is-hidden");
+    elements.projectionAnswer.textContent = `正解：${question.choices[question.answer]}｜${question.explanation}`;
+  } else {
+    elements.projectionAnswer.classList.add("is-hidden");
+  }
+}
+
 function renderPlayers() {
   elements.playerList.innerHTML = "";
 
@@ -365,11 +475,18 @@ function renderStatus() {
   elements.currentPlayer.textContent = player ? playerLabel(player) : "-";
   elements.positionLabel.textContent = player ? `位置：${describeSquare(player.position)}` : "位置：起點";
   elements.rollDice.disabled = Boolean(state.pendingQuestion || state.winner);
+  elements.questionCount.textContent = `已出題 ${state.usedQuestionKeys.size} / ${boardQuestions.length}`;
+  elements.revealAnswer.disabled = !state.pendingQuestion;
+  elements.markCorrect.disabled = !state.pendingQuestion;
+  elements.markWrong.disabled = !state.pendingQuestion;
+  elements.forceNext.disabled = state.players.length === 0 || Boolean(state.winner);
+  elements.teacherLog.textContent = state.teacherLog.length > 0 ? state.teacherLog.join("\n") : "尚未開始課堂紀錄。";
 }
 
 function render() {
   renderBoard();
   renderQuestion();
+  renderProjection();
   renderPlayers();
   renderStatus();
 }
@@ -380,6 +497,17 @@ elements.loginForm.addEventListener("submit", (event) => {
 });
 elements.startGame.addEventListener("click", startGame);
 elements.rollDice.addEventListener("click", rollDice);
+elements.toggleTeacher.addEventListener("click", () => {
+  elements.teacherPanel.classList.toggle("is-collapsed");
+});
+elements.toggleProjector.addEventListener("click", () => {
+  document.body.classList.toggle("projection-mode");
+  elements.toggleProjector.textContent = document.body.classList.contains("projection-mode") ? "返回棋盤" : "投影模式";
+});
+elements.revealAnswer.addEventListener("click", revealAnswer);
+elements.markCorrect.addEventListener("click", () => resolveQuestion(true));
+elements.markWrong.addEventListener("click", () => resolveQuestion(false));
+elements.forceNext.addEventListener("click", forceNextTurn);
 elements.reset.addEventListener("click", resetGame);
 
 renderSetupPlayers();

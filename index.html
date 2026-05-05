@@ -18,6 +18,10 @@
           <span id="dice-label">骰子 -</span>
           <span id="round-label">第 0 回合</span>
         </div>
+        <div class="mode-actions">
+          <button id="toggle-teacher" type="button">教師後台</button>
+          <button id="toggle-projector" type="button">投影模式</button>
+        </div>
       </section>
 
       <section class="setup-panel" id="setup-panel" aria-label="玩家登入">
@@ -44,6 +48,17 @@
 
       <section class="play-layout is-hidden" id="play-layout">
         <section class="board-wrap" aria-label="36 格歷史大富翁棋盤">
+          <section class="projection-screen" id="projection-screen" aria-live="polite">
+            <div class="projection-status">
+              <span id="projection-player">目前玩家 -</span>
+              <span id="projection-position">位置：起點</span>
+              <span id="projection-dice">骰子 -</span>
+            </div>
+            <p class="projection-meta" id="projection-meta">等待擲骰</p>
+            <h2 id="projection-question">投影模式會在這裡顯示目前題目。</h2>
+            <div class="projection-answers" id="projection-answers"></div>
+            <p class="projection-answer is-hidden" id="projection-answer"></p>
+          </section>
           <div class="board" id="board"></div>
         </section>
 
@@ -69,6 +84,20 @@
           <section class="players-panel">
             <h2>玩家位置</h2>
             <div id="player-list"></div>
+          </section>
+
+          <section class="teacher-panel is-collapsed" id="teacher-panel">
+            <div class="panel-title">
+              <h2>教師後台</h2>
+              <span id="question-count">已出題 0 / 70</span>
+            </div>
+            <div class="teacher-controls">
+              <button id="reveal-answer" type="button">顯示答案</button>
+              <button id="mark-correct" type="button">判定答對</button>
+              <button id="mark-wrong" type="button">判定答錯</button>
+              <button id="force-next" type="button">下一位</button>
+            </div>
+            <div class="teacher-log" id="teacher-log">尚未開始課堂紀錄。</div>
           </section>
 
           <button class="icon-button" id="reset" type="button" aria-label="重新開始" title="重新開始">

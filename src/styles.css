@@ -27,6 +27,10 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+}
+
 .is-hidden {
   display: none !important;
 }
@@ -55,6 +59,29 @@ button {
   align-items: end;
   justify-content: space-between;
   gap: 18px;
+}
+
+.mode-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mode-actions button,
+.teacher-controls button {
+  min-height: 42px;
+  border: 1px solid rgba(23, 33, 43, 0.16);
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #17212b;
+  padding: 8px 12px;
+  font-weight: 900;
+}
+
+.mode-actions button:hover,
+.teacher-controls button:hover:not(:disabled) {
+  background: #f4dfb6;
 }
 
 .eyebrow,
@@ -159,6 +186,14 @@ h1 {
   font-weight: 900;
 }
 
+.login-form button:disabled,
+.primary-action:disabled,
+.roll-button:disabled,
+.answers button:disabled,
+.teacher-controls button:disabled {
+  opacity: 0.58;
+}
+
 .primary-action,
 .roll-button {
   width: 100%;
@@ -211,6 +246,74 @@ h1 {
   background: rgba(255, 255, 255, 0.58);
   border: 1px solid rgba(23, 33, 43, 0.12);
   box-shadow: 0 24px 70px rgba(23, 33, 43, 0.12);
+}
+
+.projection-screen {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(23, 33, 43, 0.14);
+  background: #17212b;
+  color: #fffaf0;
+}
+
+.projection-status {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.projection-status span,
+.projection-meta {
+  width: fit-content;
+  margin: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 8px 10px;
+  color: #f4dfb6;
+  font-weight: 900;
+}
+
+.projection-screen h2 {
+  margin: 0;
+  font-size: clamp(1.55rem, 3vw, 3rem);
+  line-height: 1.18;
+}
+
+.projection-answers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.projection-choice {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  background: rgba(255, 250, 240, 0.1);
+  border: 1px solid rgba(255, 250, 240, 0.18);
+  padding: 12px;
+  font-size: 1.05rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.projection-choice.is-answer {
+  background: #dfebdd;
+  color: #17212b;
+}
+
+.projection-answer {
+  margin: 0;
+  border-radius: 8px;
+  background: #f4dfb6;
+  color: #17212b;
+  padding: 12px;
+  font-weight: 900;
+  line-height: 1.55;
 }
 
 .board {
@@ -291,11 +394,56 @@ h1 {
 .current-card,
 .question-card,
 .message-card,
-.players-panel {
+.players-panel,
+.teacher-panel {
   padding: 16px;
   border-radius: 8px;
   border: 1px solid rgba(23, 33, 43, 0.14);
   background: rgba(255, 255, 255, 0.74);
+}
+
+.teacher-panel.is-collapsed {
+  display: none;
+}
+
+.panel-title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.panel-title h2 {
+  margin: 0;
+}
+
+.panel-title span {
+  flex: none;
+  border-radius: 8px;
+  background: #edf1e8;
+  padding: 6px 8px;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.teacher-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.teacher-log {
+  margin-top: 12px;
+  min-height: 96px;
+  white-space: pre-wrap;
+  border-radius: 8px;
+  background: #fffaf0;
+  padding: 10px;
+  color: #4d4238;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .current-card p,
@@ -358,6 +506,49 @@ h1 {
   }
 }
 
+body.projection-mode .game-shell {
+  padding: 18px;
+  background: #101820;
+}
+
+body.projection-mode .topbar {
+  color: #fffaf0;
+}
+
+body.projection-mode .play-layout {
+  width: min(1500px, 100%);
+  grid-template-columns: 1fr minmax(280px, 340px);
+}
+
+body.projection-mode .board {
+  display: none;
+}
+
+body.projection-mode .projection-screen {
+  min-height: calc(100vh - 170px);
+  align-content: center;
+  margin-bottom: 0;
+  padding: 34px;
+}
+
+body.projection-mode .projection-screen h2 {
+  font-size: clamp(2.4rem, 5vw, 5.6rem);
+}
+
+body.projection-mode .projection-choice {
+  min-height: 96px;
+  font-size: clamp(1.3rem, 2.2vw, 2.2rem);
+}
+
+body.projection-mode .projection-answer {
+  font-size: clamp(1.1rem, 1.8vw, 1.7rem);
+}
+
+body.projection-mode .side-panel {
+  position: sticky;
+  top: 18px;
+}
+
 @media (max-width: 720px) {
   .game-shell {
     padding: 16px;
@@ -369,6 +560,10 @@ h1 {
   }
 
   .stats {
+    justify-content: flex-start;
+  }
+
+  .mode-actions {
     justify-content: flex-start;
   }
 
@@ -386,5 +581,14 @@ h1 {
 
   .board-cell {
     min-height: 104px;
+  }
+
+  .projection-answers,
+  .teacher-controls {
+    grid-template-columns: 1fr;
+  }
+
+  body.projection-mode .play-layout {
+    grid-template-columns: 1fr;
   }
 }
