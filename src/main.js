@@ -54,6 +54,11 @@ const elements = {
   questionMeta: document.querySelector("#question-meta"),
   questionTitle: document.querySelector("#question-title"),
   answers: document.querySelector("#answers"),
+  questionModal: document.querySelector("#question-modal"),
+  modalQuestionMeta: document.querySelector("#modal-question-meta"),
+  modalQuestionTitle: document.querySelector("#modal-question-title"),
+  modalAnswers: document.querySelector("#modal-answers"),
+  modalNote: document.querySelector("#modal-note"),
   message: document.querySelector("#message"),
   playerList: document.querySelector("#player-list"),
   projectionPlayer: document.querySelector("#projection-player"),
@@ -424,6 +429,12 @@ function answerQuestion(choiceIndex) {
   const pending = state.pendingQuestion;
   if (!pending) return;
 
+  const activePlayer = state.players.find((item) => item.id === pending.playerId);
+  if (state.mode === "firebase" && state.role !== "teacher" && activePlayer?.id !== state.devicePlayerId) {
+    setMessage("目前不是這台裝置登入的玩家作答回合。");
+    return;
+  }
+
   const isCorrect = choiceIndex === pending.question.answer;
   resolveQuestion(isCorrect);
 }
@@ -516,7 +527,7 @@ async function forceNextTurn() {
 
   if (state.pendingQuestion) {
     const pending = state.pendingQuestion;
-    const player = state.players[pending.playerIndex];
+    const player = state.players.find((item) => item.id === pending.playerId) ?? state.players[pending.playerIndex];
     player.position = pending.from;
     state.pendingQuestion = null;
     state.answerRevealed = false;
@@ -674,24 +685,38 @@ function renderBoard() {
 function renderQuestion() {
   const pending = state.pendingQuestion;
   elements.answers.innerHTML = "";
+  elements.modalAnswers.innerHTML = "";
 
   if (!pending) {
     elements.questionCard.classList.add("is-hidden");
+    elements.questionModal.classList.add("is-hidden");
     return;
   }
 
   const { question, to } = pending;
   elements.questionCard.classList.remove("is-hidden");
+  elements.questionModal.classList.remove("is-hidden");
   elements.questionMeta.textContent = `${describeSquare(to)}｜${question.grade}｜${question.unit}`;
   elements.questionTitle.textContent = question.question;
+  elements.modalQuestionMeta.textContent = `${describeSquare(to)}｜${question.grade}｜${question.unit}`;
+  elements.modalQuestionTitle.textContent = question.question;
+  elements.modalNote.textContent =
+    state.mode === "firebase" && state.role === "teacher"
+      ? "教師可直接代為點選答案，或使用教師後台判定。"
+      : "答題後會自動換下一位玩家。";
 
   pending.choiceOrder.forEach((choiceIndex) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = question.choices[choiceIndex];
-    button.addEventListener("click", () => answerQuestion(choiceIndex));
-    elements.answers.append(button);
+    elements.answers.append(createAnswerButton(question, choiceIndex));
+    elements.modalAnswers.append(createAnswerButton(question, choiceIndex));
   });
+}
+
+function createAnswerButton(question, choiceIndex) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = question.choices[choiceIndex];
+  button.addEventListener("click", () => answerQuestion(choiceIndex));
+  return button;
 }
 
 function renderProjection() {

@@ -57,6 +57,38 @@
           </div>
           <p class="room-status" id="room-status">目前：單機模式</p>
         </section>
+        <section class="guide-panel" aria-label="操作指引">
+          <h2>操作指引</h2>
+          <div class="guide-grid">
+            <article>
+              <h3>教師建立房間</h3>
+              <ol>
+                <li>確認房間代碼，例如 HISGAME。</li>
+                <li>按「教師建立房間」。</li>
+                <li>請學生用同一個房間代碼加入。</li>
+                <li>所有玩家出現在清單後，按「開始遊戲」。</li>
+              </ol>
+            </article>
+            <article>
+              <h3>學生登入</h3>
+              <ol>
+                <li>輸入教師指定的房間代碼。</li>
+                <li>按「學生加入」。</li>
+                <li>輸入玩家代號，例如 902-02。</li>
+                <li>按「加入」，等待輪到自己擲骰。</li>
+              </ol>
+            </article>
+            <article>
+              <h3>遊戲流程</h3>
+              <ol>
+                <li>輪到的玩家擲骰。</li>
+                <li>題目會自動跳出。</li>
+                <li>答對留在新位置，答錯退回原位置。</li>
+                <li>答題後自動換下一位玩家。</li>
+              </ol>
+            </article>
+          </div>
+        </section>
         <button class="primary-action" id="start-game" type="button">開始遊戲</button>
       </section>
 
@@ -118,6 +150,15 @@
             &#8635;
           </button>
         </aside>
+      </section>
+
+      <section class="question-modal is-hidden" id="question-modal" aria-live="polite" aria-label="目前題目">
+        <div class="modal-card">
+          <p class="question-meta" id="modal-question-meta"></p>
+          <h2 id="modal-question-title"></h2>
+          <div class="answers modal-answers" id="modal-answers"></div>
+          <p class="modal-note" id="modal-note">答題後會自動換下一位玩家。</p>
+        </div>
       </section>
     </main>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
