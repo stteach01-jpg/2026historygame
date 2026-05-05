@@ -29,7 +29,7 @@
 - 玩家：`rooms/{roomId}/players/{playerId}`
 - 操作紀錄：`rooms/{roomId}/actions/{actionId}`
 
-使用前需要在 Firebase Console 啟用 Authentication 的 Anonymous provider。Firestore rules 已部署為僅允許已登入裝置讀寫房間資料。
+Authentication 的 Anonymous provider 已啟用。Firestore rules 已部署為僅允許已登入裝置讀寫房間資料。
 
 ## 工作模式
 
