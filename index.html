@@ -43,6 +43,20 @@
         </form>
         <div class="player-list" id="setup-player-list"></div>
         <p class="setup-message" id="setup-message">加入玩家後開始遊戲。</p>
+        <section class="room-panel" aria-label="Firebase 多裝置房間">
+          <div>
+            <h2>多裝置房間</h2>
+            <p>教師建立或加入房間後，學生用同一個房間代碼加入同一場比賽。沒有網路時仍可用單機模式。</p>
+          </div>
+          <div class="room-controls">
+            <input id="room-code" type="text" value="HISGAME" maxlength="12" aria-label="房間代碼" />
+            <button id="create-room" type="button">教師建立房間</button>
+            <button id="join-room-teacher" type="button">教師加入</button>
+            <button id="join-room-student" type="button">學生加入</button>
+            <button id="use-local" type="button">單機模式</button>
+          </div>
+          <p class="room-status" id="room-status">目前：單機模式</p>
+        </section>
         <button class="primary-action" id="start-game" type="button">開始遊戲</button>
       </section>
 
@@ -106,6 +120,10 @@
         </aside>
       </section>
     </main>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <script src="./src/firebase-config.js"></script>
     <script src="./src/data/questions.js"></script>
     <script src="./src/main.js"></script>
   </body>

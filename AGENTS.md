@@ -21,7 +21,7 @@ Obsidian vault：G:\我的雲端硬碟\2026codex\secondbrain
 - 工作桌：G:\我的雲端硬碟\2026historygame
 - GitHub：https://github.com/stteach01-jpg/2026historygame
 - Obsidian：G:\我的雲端硬碟\2026codex\secondbrain + 2026historygame/專案工作流程.md
-- Firebase：未使用
+- Firebase：teacherstudy-259b4；Firestore `rooms/{roomId}` 用於多裝置同步
 
 ## 同步規則
 
@@ -49,6 +49,7 @@ Obsidian vault：G:\我的雲端硬碟\2026codex\secondbrain
 題庫資料：src/data/questions.js
 主要程式：src/main.js
 樣式：src/styles.css
+Firebase 設定：src/firebase-config.js、firebase.json、firestore.rules
 部署位置：https://stteach01-jpg.github.io/2026historygame/；GitHub Pages 從 `master` 分支根目錄部署靜態版
 
 ## 不要做

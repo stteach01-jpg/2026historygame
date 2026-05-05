@@ -165,7 +165,8 @@ h1 {
   gap: 10px;
 }
 
-.login-form input {
+.login-form input,
+.room-controls input {
   min-height: 52px;
   border: 1px solid rgba(23, 33, 43, 0.2);
   border-radius: 8px;
@@ -177,7 +178,8 @@ h1 {
 .login-form button,
 .primary-action,
 .roll-button,
-.answers button {
+.answers button,
+.room-controls button {
   min-height: 52px;
   border: 0;
   border-radius: 8px;
@@ -202,8 +204,28 @@ h1 {
 .login-form button:hover,
 .primary-action:hover,
 .roll-button:hover:not(:disabled),
-.answers button:hover {
+.answers button:hover,
+.room-controls button:hover {
   background: #7e2f21;
+}
+
+.room-panel {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid rgba(23, 33, 43, 0.12);
+  padding-top: 16px;
+}
+
+.room-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) repeat(4, auto);
+  gap: 8px;
+}
+
+.room-status {
+  min-height: 28px;
+  color: #1f6f8b;
+  font-weight: 900;
 }
 
 .roll-button:disabled {
@@ -568,6 +590,10 @@ body.projection-mode .side-panel {
   }
 
   .login-form {
+    grid-template-columns: 1fr;
+  }
+
+  .room-controls {
     grid-template-columns: 1fr;
   }
 

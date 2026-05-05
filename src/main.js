@@ -2,8 +2,20 @@ const BOARD_SIZE = 36;
 const FINISH = BOARD_SIZE - 1;
 const PLAYER_COLORS = ["#d94f30", "#1f6f8b", "#5f5aa2", "#317b22", "#b45f06", "#7a3e75"];
 const boardQuestions = window.boardQuestions;
+const firebaseConfig = window.historyGameFirebaseConfig;
+const firebaseReady = Boolean(window.firebase && firebaseConfig);
+const firebaseApp = firebaseReady ? firebase.initializeApp(firebaseConfig) : null;
+const auth = firebaseReady ? firebaseApp.auth() : null;
+const db = firebaseReady ? firebaseApp.firestore() : null;
 
 const state = {
+  mode: "local",
+  role: "teacher",
+  roomCode: "",
+  devicePlayerId: "",
+  roomData: null,
+  unsubscribeRoom: null,
+  unsubscribePlayers: null,
   players: [],
   currentPlayerIndex: 0,
   round: 0,
@@ -22,6 +34,12 @@ const elements = {
   playerId: document.querySelector("#player-id"),
   setupPlayerList: document.querySelector("#setup-player-list"),
   setupMessage: document.querySelector("#setup-message"),
+  roomCode: document.querySelector("#room-code"),
+  createRoom: document.querySelector("#create-room"),
+  joinRoomTeacher: document.querySelector("#join-room-teacher"),
+  joinRoomStudent: document.querySelector("#join-room-student"),
+  useLocal: document.querySelector("#use-local"),
+  roomStatus: document.querySelector("#room-status"),
   startGame: document.querySelector("#start-game"),
   board: document.querySelector("#board"),
   turnLabel: document.querySelector("#turn-label"),
@@ -98,6 +116,51 @@ function getCurrentPlayer() {
   return state.players[state.currentPlayerIndex];
 }
 
+function getRoomRef() {
+  return db.collection("rooms").doc(state.roomCode);
+}
+
+function getPlayersRef() {
+  return getRoomRef().collection("players");
+}
+
+function getActionsRef() {
+  return getRoomRef().collection("actions");
+}
+
+function normalizeRoomCode(value) {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 12) || "HISGAME";
+}
+
+function syncUsedQuestionsFromRoom() {
+  state.usedQuestionKeys = new Set(state.roomData?.usedQuestionIds ?? []);
+}
+
+function applyRoomTurn() {
+  const currentPlayerId = state.roomData?.currentPlayerId;
+  const index = state.players.findIndex((player) => player.id === currentPlayerId);
+  state.currentPlayerIndex = index >= 0 ? index : 0;
+  state.round = state.roomData?.round ?? 0;
+  state.dice = state.roomData?.dice ?? null;
+  state.pendingQuestion = state.roomData?.pendingQuestion ?? null;
+  state.winner = state.roomData?.winner ? state.players.find((player) => player.id === state.roomData.winner) : null;
+  state.answerRevealed = Boolean(state.roomData?.answerRevealed);
+  syncUsedQuestionsFromRoom();
+
+  if (state.roomData?.status === "playing" || state.roomData?.status === "finished") {
+    elements.setupPanel.classList.add("is-hidden");
+    elements.playLayout.classList.remove("is-hidden");
+  }
+
+  if (state.mode === "firebase") {
+    setRoomStatus(
+      `${state.role === "teacher" ? "教師" : "學生"}房間 ${state.roomCode}｜${state.roomData?.status ?? "waiting"}｜玩家 ${
+        state.players.length
+      } 人`,
+    );
+  }
+}
+
 function playerLabel(player) {
   return player.id;
 }
@@ -110,13 +173,104 @@ function isValidPlayerId(value) {
   return /^\d{3}-\d{2}$/.test(value);
 }
 
+function setRoomStatus(message) {
+  elements.roomStatus.textContent = message;
+}
+
+async function connectRoom(role, createIfMissing = false) {
+  if (!firebaseReady) {
+    setRoomStatus("Firebase 未載入，維持單機模式。");
+    setMessage("Firebase 未載入，請檢查網路；目前仍可使用單機模式。");
+    return;
+  }
+
+  if (!auth.currentUser) {
+    try {
+      await auth.signInAnonymously();
+    } catch (error) {
+      setRoomStatus("Firebase Anonymous Auth 尚未啟用。");
+      setMessage("Firebase Anonymous Auth 尚未啟用；請到 Firebase Console 開啟匿名登入，或先使用單機模式。");
+      console.error(error);
+      return;
+    }
+  }
+
+  const roomCode = normalizeRoomCode(elements.roomCode.value);
+  elements.roomCode.value = roomCode;
+  state.mode = "firebase";
+  state.role = role;
+  state.roomCode = roomCode;
+
+  const roomRef = getRoomRef();
+  const roomSnapshot = await roomRef.get();
+
+  if (!roomSnapshot.exists) {
+    if (!createIfMissing) {
+      setRoomStatus(`找不到房間 ${roomCode}，請教師先建立。`);
+      setMessage(`找不到房間 ${roomCode}。`);
+      return;
+    }
+
+    await roomRef.set({
+      status: "waiting",
+      currentPlayerId: null,
+      dice: null,
+      usedQuestionIds: [],
+      winner: null,
+      round: 0,
+      pendingQuestion: null,
+      answerRevealed: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
+  subscribeRoom();
+  setRoomStatus(`${role === "teacher" ? "教師" : "學生"}已連線房間 ${roomCode}`);
+  setMessage(`已連線房間 ${roomCode}。`);
+}
+
+function disconnectRoom() {
+  if (state.unsubscribeRoom) state.unsubscribeRoom();
+  if (state.unsubscribePlayers) state.unsubscribePlayers();
+  state.unsubscribeRoom = null;
+  state.unsubscribePlayers = null;
+  state.mode = "local";
+  state.role = "teacher";
+  state.roomCode = "";
+  state.roomData = null;
+  setRoomStatus("目前：單機模式");
+  setMessage("已切換回單機模式。");
+  render();
+}
+
+function subscribeRoom() {
+  if (state.unsubscribeRoom) state.unsubscribeRoom();
+  if (state.unsubscribePlayers) state.unsubscribePlayers();
+
+  state.unsubscribeRoom = getRoomRef().onSnapshot((snapshot) => {
+    state.roomData = snapshot.exists ? snapshot.data() : null;
+    if (state.roomData) applyRoomTurn();
+    render();
+  });
+
+  state.unsubscribePlayers = getPlayersRef().onSnapshot((snapshot) => {
+    state.players = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (a.joinedAtMillis ?? 0) - (b.joinedAtMillis ?? 0) || a.id.localeCompare(b.id));
+    if (state.roomData) applyRoomTurn();
+    renderSetupPlayers();
+    render();
+  });
+}
+
 function describeSquare(square) {
   if (square === 0) return "起點";
   if (square === FINISH) return "終點";
   return `第 ${square} 格`;
 }
 
-function addPlayer(id) {
+async function addPlayer(id) {
   const normalized = normalizePlayerId(id);
 
   if (!isValidPlayerId(normalized)) {
@@ -134,21 +288,45 @@ function addPlayer(id) {
     return;
   }
 
-  state.players.push({
+  const player = {
     id: normalized,
     position: 0,
     previousPosition: 0,
     color: PLAYER_COLORS[state.players.length],
-  });
+    joinedAtMillis: Date.now(),
+  };
+
+  if (state.mode === "firebase") {
+    state.devicePlayerId = normalized;
+    await getPlayersRef().doc(normalized).set(player, { merge: true });
+    await addRemoteAction("join", `${normalized} 加入房間。`);
+  } else {
+    state.players.push(player);
+  }
 
   elements.playerId.value = "";
   setMessage(`${normalized} 已加入。`);
   renderSetupPlayers();
 }
 
-function startGame() {
+async function addRemoteAction(type, message) {
+  if (state.mode !== "firebase") return;
+
+  await getActionsRef().add({
+    type,
+    message,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+async function startGame() {
   if (state.players.length === 0) {
     setMessage("請至少加入 1 位玩家。");
+    return;
+  }
+
+  if (state.mode === "firebase" && state.role !== "teacher") {
+    setMessage("只有教師可以開始房間比賽。");
     return;
   }
 
@@ -160,16 +338,40 @@ function startGame() {
   state.teacherLog = [];
   state.answerRevealed = false;
   state.winner = null;
+
+  if (state.mode === "firebase") {
+    await getRoomRef().set(
+      {
+        status: "playing",
+        currentPlayerId: state.players[0].id,
+        dice: null,
+        usedQuestionIds: [],
+        winner: null,
+        round: 1,
+        pendingQuestion: null,
+        answerRevealed: false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    await addRemoteAction("teacher-control", "教師開始比賽。");
+  }
+
   elements.setupPanel.classList.add("is-hidden");
   elements.playLayout.classList.remove("is-hidden");
   setMessage("輪到第一位玩家擲骰子。");
   render();
 }
 
-function rollDice() {
+async function rollDice() {
   const player = getCurrentPlayer();
 
   if (!player || state.pendingQuestion || state.winner) return;
+
+  if (state.mode === "firebase" && state.role !== "teacher" && player.id !== state.devicePlayerId) {
+    setMessage("目前不是這台裝置登入的玩家回合。");
+    return;
+  }
 
   const dice = Math.floor(Math.random() * 6) + 1;
   const from = player.position;
@@ -188,6 +390,7 @@ function rollDice() {
 
   state.pendingQuestion = {
     playerIndex: state.currentPlayerIndex,
+    playerId: player.id,
     from,
     to,
     question,
@@ -195,6 +398,23 @@ function rollDice() {
   };
   state.answerRevealed = false;
   addTeacherLog(`${playerLabel(player)} 擲出 ${dice}，從${describeSquare(from)}到${describeSquare(to)}。`);
+
+  if (state.mode === "firebase") {
+    await getPlayersRef().doc(player.id).set({ position: to, previousPosition: from }, { merge: true });
+    await getRoomRef().set(
+      {
+        status: "playing",
+        currentPlayerId: player.id,
+        dice,
+        usedQuestionIds: Array.from(state.usedQuestionKeys),
+        pendingQuestion: state.pendingQuestion,
+        answerRevealed: false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    await addRemoteAction("roll", `${playerLabel(player)} 擲出 ${dice}。`);
+  }
 
   setMessage(`${playerLabel(player)} 擲出 ${dice}，前進到${describeSquare(to)}。答對才能留在這裡。`);
   render();
@@ -208,11 +428,11 @@ function answerQuestion(choiceIndex) {
   resolveQuestion(isCorrect);
 }
 
-function resolveQuestion(isCorrect) {
+async function resolveQuestion(isCorrect) {
   const pending = state.pendingQuestion;
   if (!pending) return;
 
-  const player = state.players[pending.playerIndex];
+  const player = state.players.find((item) => item.id === pending.playerId) ?? state.players[pending.playerIndex];
 
   if (isCorrect) {
     if (pending.to === FINISH) {
@@ -220,6 +440,19 @@ function resolveQuestion(isCorrect) {
       state.pendingQuestion = null;
       state.answerRevealed = false;
       addTeacherLog(`${playerLabel(player)} 答對終點題並獲勝。`);
+      if (state.mode === "firebase") {
+        await getRoomRef().set(
+          {
+            status: "finished",
+            winner: player.id,
+            pendingQuestion: null,
+            answerRevealed: false,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        await addRemoteAction("answer", `${playerLabel(player)} 答對終點題並獲勝。`);
+      }
       setMessage(`${playerLabel(player)} 答對終點題，獲勝！`);
       render();
       return;
@@ -229,6 +462,9 @@ function resolveQuestion(isCorrect) {
     setMessage(`答對！${playerLabel(player)} 留在${describeSquare(pending.to)}。${pending.question.explanation}`);
   } else {
     player.position = pending.from;
+    if (state.mode === "firebase") {
+      await getPlayersRef().doc(player.id).set({ position: pending.from }, { merge: true });
+    }
     addTeacherLog(`${playerLabel(player)} 答錯，退回${describeSquare(pending.from)}。`);
     setMessage(
       `答錯，${playerLabel(player)} 退回${describeSquare(pending.from)}。正解：${
@@ -240,10 +476,27 @@ function resolveQuestion(isCorrect) {
   state.pendingQuestion = null;
   state.answerRevealed = false;
   advanceTurn();
+
+  if (state.mode === "firebase") {
+    const nextPlayer = getCurrentPlayer();
+    await getRoomRef().set(
+      {
+        currentPlayerId: nextPlayer?.id ?? null,
+        round: state.round,
+        pendingQuestion: null,
+        answerRevealed: false,
+        winner: null,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    await addRemoteAction("answer", `${playerLabel(player)} ${isCorrect ? "答對" : "答錯"}。`);
+  }
+
   render();
 }
 
-function revealAnswer() {
+async function revealAnswer() {
   if (!state.pendingQuestion) {
     setMessage("目前沒有待答題目。");
     return;
@@ -251,10 +504,14 @@ function revealAnswer() {
 
   state.answerRevealed = true;
   addTeacherLog(`顯示答案：${state.pendingQuestion.question.choices[state.pendingQuestion.question.answer]}`);
+  if (state.mode === "firebase") {
+    await getRoomRef().set({ answerRevealed: true }, { merge: true });
+    await addRemoteAction("teacher-control", "教師顯示答案。");
+  }
   render();
 }
 
-function forceNextTurn() {
+async function forceNextTurn() {
   if (state.winner) return;
 
   if (state.pendingQuestion) {
@@ -263,6 +520,9 @@ function forceNextTurn() {
     player.position = pending.from;
     state.pendingQuestion = null;
     state.answerRevealed = false;
+    if (state.mode === "firebase") {
+      await getPlayersRef().doc(player.id).set({ position: pending.from }, { merge: true });
+    }
     addTeacherLog(`${playerLabel(player)} 的題目略過，回到${describeSquare(pending.from)}。`);
     setMessage(`${playerLabel(player)} 的題目已略過，回到${describeSquare(pending.from)}。`);
   } else {
@@ -271,6 +531,20 @@ function forceNextTurn() {
   }
 
   advanceTurn();
+  if (state.mode === "firebase") {
+    const nextPlayer = getCurrentPlayer();
+    await getRoomRef().set(
+      {
+        currentPlayerId: nextPlayer?.id ?? null,
+        round: state.round,
+        pendingQuestion: null,
+        answerRevealed: false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    await addRemoteAction("teacher-control", "教師切換到下一位。");
+  }
   render();
 }
 
@@ -283,7 +557,25 @@ function advanceTurn() {
   }
 }
 
-function resetGame() {
+async function resetGame() {
+  if (state.mode === "firebase" && state.role === "teacher" && state.roomCode) {
+    await getRoomRef().set(
+      {
+        status: "waiting",
+        currentPlayerId: null,
+        dice: null,
+        usedQuestionIds: [],
+        winner: null,
+        round: 0,
+        pendingQuestion: null,
+        answerRevealed: false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    await addRemoteAction("teacher-control", "教師重新開始房間。");
+  }
+
   state.players = [];
   state.currentPlayerIndex = 0;
   state.round = 0;
@@ -293,6 +585,7 @@ function resetGame() {
   state.teacherLog = [];
   state.answerRevealed = false;
   state.winner = null;
+  state.devicePlayerId = "";
   elements.setupPanel.classList.remove("is-hidden");
   elements.playLayout.classList.add("is-hidden");
   elements.playerId.value = "";
@@ -474,12 +767,14 @@ function renderStatus() {
   elements.roundLabel.textContent = `第 ${state.round} 回合`;
   elements.currentPlayer.textContent = player ? playerLabel(player) : "-";
   elements.positionLabel.textContent = player ? `位置：${describeSquare(player.position)}` : "位置：起點";
-  elements.rollDice.disabled = Boolean(state.pendingQuestion || state.winner);
+  const isThisDeviceTurn = state.mode !== "firebase" || state.role === "teacher" || player?.id === state.devicePlayerId;
+  elements.rollDice.disabled = Boolean(state.pendingQuestion || state.winner || !isThisDeviceTurn);
   elements.questionCount.textContent = `已出題 ${state.usedQuestionKeys.size} / ${boardQuestions.length}`;
-  elements.revealAnswer.disabled = !state.pendingQuestion;
-  elements.markCorrect.disabled = !state.pendingQuestion;
-  elements.markWrong.disabled = !state.pendingQuestion;
-  elements.forceNext.disabled = state.players.length === 0 || Boolean(state.winner);
+  const teacherControlDisabled = state.mode === "firebase" && state.role !== "teacher";
+  elements.revealAnswer.disabled = !state.pendingQuestion || teacherControlDisabled;
+  elements.markCorrect.disabled = !state.pendingQuestion || teacherControlDisabled;
+  elements.markWrong.disabled = !state.pendingQuestion || teacherControlDisabled;
+  elements.forceNext.disabled = state.players.length === 0 || Boolean(state.winner) || teacherControlDisabled;
   elements.teacherLog.textContent = state.teacherLog.length > 0 ? state.teacherLog.join("\n") : "尚未開始課堂紀錄。";
 }
 
@@ -497,6 +792,10 @@ elements.loginForm.addEventListener("submit", (event) => {
 });
 elements.startGame.addEventListener("click", startGame);
 elements.rollDice.addEventListener("click", rollDice);
+elements.createRoom.addEventListener("click", () => connectRoom("teacher", true));
+elements.joinRoomTeacher.addEventListener("click", () => connectRoom("teacher", false));
+elements.joinRoomStudent.addEventListener("click", () => connectRoom("student", false));
+elements.useLocal.addEventListener("click", disconnectRoom);
 elements.toggleTeacher.addEventListener("click", () => {
   elements.teacherPanel.classList.toggle("is-collapsed");
 });

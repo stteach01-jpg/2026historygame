@@ -16,8 +16,20 @@
 - 題目包含資料判讀、因果推論、時序整理與跨單元比較
 - 教師後台可顯示答案、手動判定答對/答錯、略過題目與查看課堂紀錄
 - 投影模式會放大目前玩家、骰子、題目、選項與正解說明
+- Firebase 多裝置房間模式：教師建立房間，學生用同一房間代碼從不同平板加入
+- 保留單機模式作為沒有網路或 Firebase 無法連線時的備援
 - 答對停留、答錯退回、終點答對獲勝
 - 支援桌面與手機版面
+
+## Firebase 多裝置模式
+
+目前使用 Firebase project `teacherstudy-259b4` 的 Firestore：
+
+- 房間：`rooms/{roomId}`
+- 玩家：`rooms/{roomId}/players/{playerId}`
+- 操作紀錄：`rooms/{roomId}/actions/{actionId}`
+
+使用前需要在 Firebase Console 啟用 Authentication 的 Anonymous provider。Firestore rules 已部署為僅允許已登入裝置讀寫房間資料。
 
 ## 工作模式
 
@@ -30,5 +42,7 @@
 
 - `index.html`: 遊戲畫面結構
 - `src/main.js`: 登入、擲骰、棋盤、答題與勝負流程
+- `src/firebase-config.js`: Firebase Web 設定
 - `src/data/questions.js`: 36 格歷史題庫
 - `src/styles.css`: 介面樣式
+- `firestore.rules`: Firestore 房間同步規則
