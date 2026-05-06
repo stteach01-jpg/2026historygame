@@ -486,6 +486,10 @@ h1 {
   gap: 8px;
 }
 
+#export-record {
+  grid-column: 1 / -1;
+}
+
 .teacher-log {
   margin-top: 12px;
   min-height: 96px;

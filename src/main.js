@@ -16,6 +16,7 @@ const state = {
   roomData: null,
   unsubscribeRoom: null,
   unsubscribePlayers: null,
+  unsubscribeActions: null,
   players: [],
   currentPlayerIndex: 0,
   round: 0,
@@ -23,6 +24,7 @@ const state = {
   pendingQuestion: null,
   usedQuestionKeys: new Set(),
   teacherLog: [],
+  remoteActions: [],
   answerRevealed: false,
   winner: null,
 };
@@ -74,6 +76,9 @@ const elements = {
   markCorrect: document.querySelector("#mark-correct"),
   markWrong: document.querySelector("#mark-wrong"),
   forceNext: document.querySelector("#force-next"),
+  resetRoom: document.querySelector("#reset-room"),
+  clearPlayers: document.querySelector("#clear-players"),
+  exportRecord: document.querySelector("#export-record"),
   teacherLog: document.querySelector("#teacher-log"),
   reset: document.querySelector("#reset"),
 };
@@ -133,6 +138,10 @@ function getActionsRef() {
   return getRoomRef().collection("actions");
 }
 
+function getDevicePlayerStorageKey(roomCode) {
+  return `history-monopoly-player-${roomCode}`;
+}
+
 function normalizeRoomCode(value) {
   return value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 12) || "HISGAME";
 }
@@ -152,9 +161,15 @@ function applyRoomTurn() {
   state.answerRevealed = Boolean(state.roomData?.answerRevealed);
   syncUsedQuestionsFromRoom();
 
-  if (state.roomData?.status === "playing" || state.roomData?.status === "finished") {
+  const needsStudentBinding = state.mode === "firebase" && state.role === "student" && !state.devicePlayerId;
+
+  if ((state.roomData?.status === "playing" || state.roomData?.status === "finished") && !needsStudentBinding) {
     elements.setupPanel.classList.add("is-hidden");
     elements.playLayout.classList.remove("is-hidden");
+  } else if (needsStudentBinding) {
+    elements.setupPanel.classList.remove("is-hidden");
+    elements.playLayout.classList.add("is-hidden");
+    setMessage("請先輸入自己的玩家代號，將這台裝置綁定到座號。");
   }
 
   if (state.mode === "firebase") {
@@ -205,6 +220,7 @@ async function connectRoom(role, createIfMissing = false) {
   state.mode = "firebase";
   state.role = role;
   state.roomCode = roomCode;
+  state.devicePlayerId = role === "student" ? localStorage.getItem(getDevicePlayerStorageKey(roomCode)) || "" : "";
 
   const roomRef = getRoomRef();
   const roomSnapshot = await roomRef.get();
@@ -238,12 +254,15 @@ async function connectRoom(role, createIfMissing = false) {
 function disconnectRoom() {
   if (state.unsubscribeRoom) state.unsubscribeRoom();
   if (state.unsubscribePlayers) state.unsubscribePlayers();
+  if (state.unsubscribeActions) state.unsubscribeActions();
   state.unsubscribeRoom = null;
   state.unsubscribePlayers = null;
+  state.unsubscribeActions = null;
   state.mode = "local";
   state.role = "teacher";
   state.roomCode = "";
   state.roomData = null;
+  state.remoteActions = [];
   setRoomStatus("目前：單機模式");
   setMessage("已切換回單機模式。");
   render();
@@ -252,6 +271,7 @@ function disconnectRoom() {
 function subscribeRoom() {
   if (state.unsubscribeRoom) state.unsubscribeRoom();
   if (state.unsubscribePlayers) state.unsubscribePlayers();
+  if (state.unsubscribeActions) state.unsubscribeActions();
 
   state.unsubscribeRoom = getRoomRef().onSnapshot((snapshot) => {
     state.roomData = snapshot.exists ? snapshot.data() : null;
@@ -267,6 +287,22 @@ function subscribeRoom() {
     renderSetupPlayers();
     render();
   });
+
+  state.unsubscribeActions = getActionsRef()
+    .orderBy("createdAt", "desc")
+    .limit(80)
+    .onSnapshot((snapshot) => {
+      state.remoteActions = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: data.type ?? "",
+          message: data.message ?? "",
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
+        };
+      });
+      render();
+    });
 }
 
 function describeSquare(square) {
@@ -284,6 +320,16 @@ async function addPlayer(id) {
   }
 
   if (state.players.some((player) => player.id === normalized)) {
+    if (state.mode === "firebase") {
+      state.devicePlayerId = normalized;
+      localStorage.setItem(getDevicePlayerStorageKey(state.roomCode), normalized);
+      await getPlayersRef().doc(normalized).set({ lastSeenAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      await addRemoteAction("join", `${normalized} 已在本裝置綁定。`);
+      if (state.roomData) applyRoomTurn();
+      setMessage(`${normalized} 已綁定到這台裝置；輪到你時可以擲骰與作答。`);
+      render();
+      return;
+    }
     setMessage(`${normalized} 已經加入。`);
     return;
   }
@@ -303,6 +349,7 @@ async function addPlayer(id) {
 
   if (state.mode === "firebase") {
     state.devicePlayerId = normalized;
+    localStorage.setItem(getDevicePlayerStorageKey(state.roomCode), normalized);
     await getPlayersRef().doc(normalized).set(player, { merge: true });
     await addRemoteAction("join", `${normalized} 加入房間。`);
   } else {
@@ -570,6 +617,56 @@ function advanceTurn() {
 
 async function resetGame() {
   if (state.mode === "firebase" && state.role === "teacher" && state.roomCode) {
+    await resetRoomGame(false);
+    return;
+  }
+
+  resetLocalGameState(true);
+  setMessage("加入玩家後開始遊戲。");
+  renderSetupPlayers();
+  render();
+}
+
+function resetLocalGameState(clearPlayers) {
+  if (clearPlayers) {
+    state.players = [];
+  } else {
+    state.players = state.players.map((player) => ({ ...player, position: 0, previousPosition: 0 }));
+  }
+  state.currentPlayerIndex = 0;
+  state.round = 0;
+  state.dice = null;
+  state.pendingQuestion = null;
+  state.usedQuestionKeys = new Set();
+  state.teacherLog = [];
+  state.remoteActions = [];
+  state.answerRevealed = false;
+  state.winner = null;
+  state.devicePlayerId = "";
+  elements.setupPanel.classList.remove("is-hidden");
+  elements.playLayout.classList.add("is-hidden");
+  elements.playerId.value = "";
+}
+
+async function resetRoomGame(clearPlayers) {
+  if (state.mode === "firebase" && state.role !== "teacher") {
+    setMessage("只有教師可以重置房間。");
+    return;
+  }
+
+  if (state.mode === "firebase") {
+    const batch = db.batch();
+    const playersSnapshot = await getPlayersRef().get();
+
+    playersSnapshot.docs.forEach((doc) => {
+      if (clearPlayers) {
+        batch.delete(doc.ref);
+      } else {
+        batch.set(doc.ref, { position: 0, previousPosition: 0 }, { merge: true });
+      }
+    });
+
+    await batch.commit();
     await getRoomRef().set(
       {
         status: "waiting",
@@ -584,25 +681,68 @@ async function resetGame() {
       },
       { merge: true },
     );
-    await addRemoteAction("teacher-control", "教師重新開始房間。");
+    await addRemoteAction("teacher-control", clearPlayers ? "教師清空玩家並重置房間。" : "教師重置本局，保留玩家。");
+  } else {
+    resetLocalGameState(clearPlayers);
   }
 
-  state.players = [];
-  state.currentPlayerIndex = 0;
-  state.round = 0;
-  state.dice = null;
-  state.pendingQuestion = null;
-  state.usedQuestionKeys = new Set();
-  state.teacherLog = [];
-  state.answerRevealed = false;
-  state.winner = null;
-  state.devicePlayerId = "";
+  if (clearPlayers) {
+    state.devicePlayerId = "";
+    if (state.roomCode) localStorage.removeItem(getDevicePlayerStorageKey(state.roomCode));
+  }
   elements.setupPanel.classList.remove("is-hidden");
   elements.playLayout.classList.add("is-hidden");
   elements.playerId.value = "";
-  setMessage("加入玩家後開始遊戲。");
+  setMessage(clearPlayers ? "已清空玩家，請重新加入。" : "本局已重置，玩家保留在起點。");
   renderSetupPlayers();
   render();
+}
+
+async function clearPlayers() {
+  await resetRoomGame(true);
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function exportRecord() {
+  const actionRows =
+    state.mode === "firebase" && state.remoteActions.length > 0
+      ? state.remoteActions
+          .slice()
+          .reverse()
+          .map((action) => [action.createdAt ? action.createdAt.toLocaleString("zh-TW", { hour12: false }) : "", action.type, action.message])
+      : state.teacherLog
+          .slice()
+          .reverse()
+          .map((line) => ["", "local-log", line]);
+
+  const rows = [
+    ["類別", "時間", "欄位", "內容"],
+    ["房間", new Date().toLocaleString("zh-TW", { hour12: false }), "roomCode", state.roomCode || "local"],
+    ["房間", "", "status", state.roomData?.status ?? (state.winner ? "finished" : "local")],
+    ["房間", "", "currentPlayerId", getCurrentPlayer()?.id ?? ""],
+    ["房間", "", "winner", state.winner?.id ?? state.roomData?.winner ?? ""],
+    ["玩家", "", "count", state.players.length],
+    ...state.players.map((player) => ["玩家", "", player.id, `位置 ${describeSquare(player.position)}；上一格 ${describeSquare(player.previousPosition ?? 0)}`]),
+    ["紀錄", "時間", "type", "message"],
+    ...actionRows.map(([time, type, message]) => ["紀錄", time, type, message]),
+  ];
+
+  const csv = `\ufeff${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const room = state.roomCode || "local";
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  link.href = url;
+  link.download = `history-game-${room}-${stamp}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  setMessage("已匯出本局紀錄 CSV。");
 }
 
 function addTeacherLog(message) {
@@ -800,7 +940,16 @@ function renderStatus() {
   elements.markCorrect.disabled = !state.pendingQuestion || teacherControlDisabled;
   elements.markWrong.disabled = !state.pendingQuestion || teacherControlDisabled;
   elements.forceNext.disabled = state.players.length === 0 || Boolean(state.winner) || teacherControlDisabled;
-  elements.teacherLog.textContent = state.teacherLog.length > 0 ? state.teacherLog.join("\n") : "尚未開始課堂紀錄。";
+  elements.resetRoom.disabled = teacherControlDisabled;
+  elements.clearPlayers.disabled = teacherControlDisabled;
+  const logLines =
+    state.mode === "firebase" && state.remoteActions.length > 0
+      ? state.remoteActions.map((action) => {
+          const time = action.createdAt ? action.createdAt.toLocaleTimeString("zh-TW", { hour12: false }) : "--:--:--";
+          return `${time} ${action.message}`;
+        })
+      : state.teacherLog;
+  elements.teacherLog.textContent = logLines.length > 0 ? logLines.join("\n") : "尚未開始課堂紀錄。";
 }
 
 function render() {
@@ -832,6 +981,9 @@ elements.revealAnswer.addEventListener("click", revealAnswer);
 elements.markCorrect.addEventListener("click", () => resolveQuestion(true));
 elements.markWrong.addEventListener("click", () => resolveQuestion(false));
 elements.forceNext.addEventListener("click", forceNextTurn);
+elements.resetRoom.addEventListener("click", () => resetRoomGame(false));
+elements.clearPlayers.addEventListener("click", clearPlayers);
+elements.exportRecord.addEventListener("click", exportRecord);
 elements.reset.addEventListener("click", resetGame);
 
 renderSetupPlayers();
