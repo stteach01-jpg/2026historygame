@@ -119,11 +119,19 @@ function getNextQuestion(square) {
 
   const picked = candidates[Math.floor(Math.random() * candidates.length)];
   state.usedQuestionKeys.add(picked.key);
-  return picked.question;
+  return picked;
 }
 
 function getCurrentPlayer() {
   return state.players[state.currentPlayerIndex];
+}
+
+function getNextPlayerAfter(playerId) {
+  if (state.players.length === 0) return null;
+
+  const currentIndex = state.players.findIndex((player) => player.id === playerId);
+  const safeIndex = currentIndex >= 0 ? currentIndex : state.currentPlayerIndex;
+  return state.players[(safeIndex + 1) % state.players.length] ?? null;
 }
 
 function getRoomRef() {
@@ -241,6 +249,7 @@ async function connectRoom(role, createIfMissing = false) {
       round: 0,
       pendingQuestion: null,
       answerRevealed: false,
+      nextJoinOrder: 0,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
@@ -282,7 +291,7 @@ function subscribeRoom() {
   state.unsubscribePlayers = getPlayersRef().onSnapshot((snapshot) => {
     state.players = snapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .sort((a, b) => (a.joinedAtMillis ?? 0) - (b.joinedAtMillis ?? 0) || a.id.localeCompare(b.id));
+      .sort((a, b) => (a.joinOrder ?? a.joinedAtMillis ?? 0) - (b.joinOrder ?? b.joinedAtMillis ?? 0) || a.id.localeCompare(b.id));
     if (state.roomData) applyRoomTurn();
     renderSetupPlayers();
     render();
@@ -350,7 +359,33 @@ async function addPlayer(id) {
   if (state.mode === "firebase") {
     state.devicePlayerId = normalized;
     localStorage.setItem(getDevicePlayerStorageKey(state.roomCode), normalized);
-    await getPlayersRef().doc(normalized).set(player, { merge: true });
+    await db.runTransaction(async (transaction) => {
+      const roomRef = getRoomRef();
+      const playerRef = getPlayersRef().doc(normalized);
+      const roomSnapshot = await transaction.get(roomRef);
+      const playerSnapshot = await transaction.get(playerRef);
+
+      if (playerSnapshot.exists) {
+        transaction.set(playerRef, { lastSeenAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        return;
+      }
+
+      const joinOrder = roomSnapshot.data()?.nextJoinOrder ?? state.players.length;
+      transaction.set(playerRef, {
+        ...player,
+        color: PLAYER_COLORS[joinOrder % PLAYER_COLORS.length],
+        joinOrder,
+        joinedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      transaction.set(
+        roomRef,
+        {
+          nextJoinOrder: joinOrder + 1,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    });
     await addRemoteAction("join", `${normalized} 加入房間。`);
   } else {
     state.players.push(player);
@@ -406,12 +441,12 @@ async function startGame() {
       },
       { merge: true },
     );
-    await addRemoteAction("teacher-control", "教師開始比賽。");
+    await addRemoteAction("teacher-control", `教師開始比賽，${state.players[0].id} 依加入順序先擲骰。`);
   }
 
   elements.setupPanel.classList.add("is-hidden");
   elements.playLayout.classList.remove("is-hidden");
-  setMessage("輪到第一位玩家擲骰子。");
+  setMessage(`依加入房間順序開始，輪到 ${state.players[0].id} 擲骰子。`);
   render();
 }
 
@@ -428,48 +463,57 @@ async function rollDice() {
   const dice = Math.floor(Math.random() * 6) + 1;
   const from = player.position;
   const to = Math.min(FINISH, from + dice);
-  const question = getNextQuestion(to);
+  const questionEntry = getNextQuestion(to);
 
   state.dice = dice;
   player.previousPosition = from;
   player.position = to;
 
-  if (!question) {
+  if (!questionEntry) {
     setMessage("本局題庫已全部使用，請重新開始一局。");
     render();
     return;
   }
 
+  const question = questionEntry.question;
   state.pendingQuestion = {
     playerIndex: state.currentPlayerIndex,
     playerId: player.id,
     from,
     to,
+    questionKey: questionEntry.key,
     question,
     choiceOrder: shuffledChoiceOrder(question.choices.length),
   };
   state.answerRevealed = false;
   addTeacherLog(`${playerLabel(player)} 擲出 ${dice}，從${describeSquare(from)}到${describeSquare(to)}。`);
-
-  if (state.mode === "firebase") {
-    await getPlayersRef().doc(player.id).set({ position: to, previousPosition: from }, { merge: true });
-    await getRoomRef().set(
-      {
-        status: "playing",
-        currentPlayerId: player.id,
-        dice,
-        usedQuestionIds: Array.from(state.usedQuestionKeys),
-        pendingQuestion: state.pendingQuestion,
-        answerRevealed: false,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-    await addRemoteAction("roll", `${playerLabel(player)} 擲出 ${dice}。`);
-  }
-
   setMessage(`${playerLabel(player)} 擲出 ${dice}，前進到${describeSquare(to)}。答對才能留在這裡。`);
   render();
+
+  if (state.mode === "firebase") {
+    try {
+      const batch = db.batch();
+      batch.set(getPlayersRef().doc(player.id), { position: to, previousPosition: from }, { merge: true });
+      batch.set(
+        getRoomRef(),
+        {
+          status: "playing",
+          currentPlayerId: player.id,
+          dice,
+          usedQuestionIds: Array.from(state.usedQuestionKeys),
+          pendingQuestion: state.pendingQuestion,
+          answerRevealed: false,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      await batch.commit();
+      await addRemoteAction("roll", `${playerLabel(player)} 擲出 ${dice}，題目已送出。`);
+    } catch (error) {
+      console.error(error);
+      setMessage("擲骰成功，但題目同步到 Firebase 失敗；請重新整理後再試一次。");
+    }
+  }
 }
 
 function answerQuestion(choiceIndex) {
@@ -533,10 +577,10 @@ async function resolveQuestion(isCorrect) {
 
   state.pendingQuestion = null;
   state.answerRevealed = false;
-  advanceTurn();
+  const nextPlayer = getNextPlayerAfter(player.id);
+  advanceTurn(player.id);
 
   if (state.mode === "firebase") {
-    const nextPlayer = getCurrentPlayer();
     await getRoomRef().set(
       {
         currentPlayerId: nextPlayer?.id ?? null,
@@ -548,7 +592,10 @@ async function resolveQuestion(isCorrect) {
       },
       { merge: true },
     );
-    await addRemoteAction("answer", `${playerLabel(player)} ${isCorrect ? "答對" : "答錯"}。`);
+    await addRemoteAction(
+      "answer",
+      `${playerLabel(player)} ${isCorrect ? "答對" : "答錯"}，自動輪到 ${nextPlayer ? playerLabel(nextPlayer) : "下一位"}。`,
+    );
   }
 
   render();
@@ -588,9 +635,9 @@ async function forceNextTurn() {
     setMessage("已切換到下一位玩家。");
   }
 
-  advanceTurn();
+  const nextPlayer = getNextPlayerAfter(state.pendingQuestion?.playerId ?? getCurrentPlayer()?.id);
+  advanceTurn(state.pendingQuestion?.playerId ?? getCurrentPlayer()?.id);
   if (state.mode === "firebase") {
-    const nextPlayer = getCurrentPlayer();
     await getRoomRef().set(
       {
         currentPlayerId: nextPlayer?.id ?? null,
@@ -606,11 +653,13 @@ async function forceNextTurn() {
   render();
 }
 
-function advanceTurn() {
+function advanceTurn(fromPlayerId = getCurrentPlayer()?.id) {
   if (state.players.length === 0) return;
 
-  state.currentPlayerIndex = (state.currentPlayerIndex + 1) % state.players.length;
-  if (state.currentPlayerIndex === 0) {
+  const currentIndex = state.players.findIndex((player) => player.id === fromPlayerId);
+  const safeIndex = currentIndex >= 0 ? currentIndex : state.currentPlayerIndex;
+  state.currentPlayerIndex = (safeIndex + 1) % state.players.length;
+  if (state.currentPlayerIndex <= safeIndex) {
     state.round += 1;
   }
 }
@@ -677,6 +726,7 @@ async function resetRoomGame(clearPlayers) {
         round: 0,
         pendingQuestion: null,
         answerRevealed: false,
+        nextJoinOrder: clearPlayers ? 0 : state.roomData?.nextJoinOrder ?? state.players.length,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true },
