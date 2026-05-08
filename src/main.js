@@ -182,7 +182,7 @@ function applyRoomTurn() {
 
   if (state.mode === "firebase") {
     setRoomStatus(
-      `${state.role === "teacher" ? "教師" : "學生"}房間 ${state.roomCode}｜${state.roomData?.status ?? "waiting"}｜玩家 ${
+      `${state.role === "teacher" ? "教師" : "學生"}基地 ${state.roomCode}｜${state.roomData?.status ?? "waiting"}｜玩家 ${
         state.players.length
       } 人`,
     );
@@ -235,8 +235,8 @@ async function connectRoom(role, createIfMissing = false) {
 
   if (!roomSnapshot.exists) {
     if (!createIfMissing) {
-      setRoomStatus(`找不到房間 ${roomCode}，請教師先建立。`);
-      setMessage(`找不到房間 ${roomCode}。`);
+      setRoomStatus(`找不到基地 ${roomCode}，請教師先建立。`);
+      setMessage(`找不到基地 ${roomCode}。`);
       return;
     }
 
@@ -256,8 +256,8 @@ async function connectRoom(role, createIfMissing = false) {
   }
 
   subscribeRoom();
-  setRoomStatus(`${role === "teacher" ? "教師" : "學生"}已連線房間 ${roomCode}`);
-  setMessage(`已連線房間 ${roomCode}。`);
+  setRoomStatus(`${role === "teacher" ? "教師" : "學生"}已連線基地 ${roomCode}`);
+  setMessage(`已連線基地 ${roomCode}。`);
 }
 
 function disconnectRoom() {
@@ -386,7 +386,7 @@ async function addPlayer(id) {
         { merge: true },
       );
     });
-    await addRemoteAction("join", `${normalized} 加入房間。`);
+    await addRemoteAction("join", `${normalized} 加入基地。`);
   } else {
     state.players.push(player);
   }
@@ -413,7 +413,7 @@ async function startGame() {
   }
 
   if (state.mode === "firebase" && state.role !== "teacher") {
-    setMessage("只有教師可以開始房間比賽。");
+    setMessage("只有教師可以開始基地比賽。");
     return;
   }
 
@@ -446,7 +446,7 @@ async function startGame() {
 
   elements.setupPanel.classList.add("is-hidden");
   elements.playLayout.classList.remove("is-hidden");
-  setMessage(`依加入房間順序開始，輪到 ${state.players[0].id} 擲骰子。`);
+  setMessage(`依加入基地順序開始，輪到 ${state.players[0].id} 擲骰子。`);
   render();
 }
 
@@ -699,7 +699,7 @@ function resetLocalGameState(clearPlayers) {
 
 async function resetRoomGame(clearPlayers) {
   if (state.mode === "firebase" && state.role !== "teacher") {
-    setMessage("只有教師可以重置房間。");
+    setMessage("只有教師可以重置基地。");
     return;
   }
 
@@ -731,7 +731,7 @@ async function resetRoomGame(clearPlayers) {
       },
       { merge: true },
     );
-    await addRemoteAction("teacher-control", clearPlayers ? "教師清空玩家並重置房間。" : "教師重置本局，保留玩家。");
+    await addRemoteAction("teacher-control", clearPlayers ? "教師清空玩家並重置基地。" : "教師重置本局，保留玩家。");
   } else {
     resetLocalGameState(clearPlayers);
   }
@@ -770,10 +770,10 @@ function exportRecord() {
 
   const rows = [
     ["類別", "時間", "欄位", "內容"],
-    ["房間", new Date().toLocaleString("zh-TW", { hour12: false }), "roomCode", state.roomCode || "local"],
-    ["房間", "", "status", state.roomData?.status ?? (state.winner ? "finished" : "local")],
-    ["房間", "", "currentPlayerId", getCurrentPlayer()?.id ?? ""],
-    ["房間", "", "winner", state.winner?.id ?? state.roomData?.winner ?? ""],
+    ["基地", new Date().toLocaleString("zh-TW", { hour12: false }), "roomCode", state.roomCode || "local"],
+    ["基地", "", "status", state.roomData?.status ?? (state.winner ? "finished" : "local")],
+    ["基地", "", "currentPlayerId", getCurrentPlayer()?.id ?? ""],
+    ["基地", "", "winner", state.winner?.id ?? state.roomData?.winner ?? ""],
     ["玩家", "", "count", state.players.length],
     ...state.players.map((player) => ["玩家", "", player.id, `位置 ${describeSquare(player.position)}；上一格 ${describeSquare(player.previousPosition ?? 0)}`]),
     ["紀錄", "時間", "type", "message"],
