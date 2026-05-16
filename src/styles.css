@@ -371,7 +371,7 @@ h1 {
 
 .board {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--board-columns, 6), minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -386,6 +386,16 @@ h1 {
   border-radius: 8px;
   border: 1px solid rgba(23, 33, 43, 0.15);
   background: #fffaf0;
+}
+
+.trap-cell {
+  border-color: rgba(161, 46, 46, 0.45);
+  background: linear-gradient(145deg, rgba(255, 242, 235, 0.94), rgba(255, 220, 209, 0.94));
+}
+
+.gold-cell {
+  border-color: rgba(175, 126, 20, 0.5);
+  background: linear-gradient(145deg, rgba(255, 249, 219, 0.96), rgba(255, 232, 142, 0.9));
 }
 
 .board-cell strong {

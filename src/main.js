@@ -1,10 +1,18 @@
-const BOARD_SIZE = 36;
-const FINISH = BOARD_SIZE - 1;
+const DEFAULT_BOARD_CONFIG = {
+  size: 36,
+  columns: 6,
+  trapSquares: [],
+  goldSquares: [],
+};
 const PLAYER_COLORS = ["#d94f30", "#1f6f8b", "#5f5aa2", "#317b22", "#b45f06", "#7a3e75"];
 const defaultBoardQuestions = window.boardQuestions ?? [];
 const questionBanks = {
   HISGAME: defaultBoardQuestions,
   ...(window.questionBanks ?? {}),
+};
+const boardConfigs = {
+  HISGAME: DEFAULT_BOARD_CONFIG,
+  ...(window.boardConfigs ?? {}),
 };
 const firebaseConfig = window.historyGameFirebaseConfig;
 const firebaseReady = Boolean(window.firebase && firebaseConfig);
@@ -87,12 +95,37 @@ const elements = {
   reset: document.querySelector("#reset"),
 };
 
+function getActiveBoardConfig() {
+  const bankId = getActiveQuestionBankId();
+  const config = boardConfigs[bankId] ?? DEFAULT_BOARD_CONFIG;
+  return {
+    ...DEFAULT_BOARD_CONFIG,
+    ...config,
+    trapSquares: config.trapSquares ?? [],
+    goldSquares: config.goldSquares ?? [],
+  };
+}
+
+function getFinishSquare() {
+  return getActiveBoardConfig().size - 1;
+}
+
+function isTrapSquare(square) {
+  return getActiveBoardConfig().trapSquares.includes(square);
+}
+
+function isGoldSquare(square) {
+  return getActiveBoardConfig().goldSquares.includes(square);
+}
+
 function boardDisplayOrder() {
   const rows = [];
+  const { size, columns } = getActiveBoardConfig();
+  const rowCount = Math.ceil(size / columns);
 
-  for (let row = 5; row >= 0; row -= 1) {
-    const start = row * 6;
-    const cells = Array.from({ length: 6 }, (_, index) => start + index);
+  for (let row = rowCount - 1; row >= 0; row -= 1) {
+    const start = row * columns;
+    const cells = Array.from({ length: columns }, (_, index) => start + index).filter((square) => square < size);
     rows.push(row % 2 === 0 ? cells : cells.reverse());
   }
 
@@ -118,12 +151,19 @@ function getQuestion(square) {
   return getActiveQuestionBank().find((question) => question.square === square);
 }
 
+function getUsableQuestions() {
+  const finish = getFinishSquare();
+  return getActiveQuestionBank().filter(
+    (question) => question.square >= 1 && question.square <= finish && !isTrapSquare(question.square) && !isGoldSquare(question.square),
+  );
+}
+
 function questionKey(question, index) {
   return question.id ?? `${question.square}-${index}-${question.question}`;
 }
 
 function getNextQuestion(square) {
-  const activeQuestions = getActiveQuestionBank();
+  const activeQuestions = getUsableQuestions();
   const exactSquareCandidates = activeQuestions
     .map((question, index) => ({ question, key: questionKey(question, index) }))
     .filter((entry) => entry.question.square === square && !state.usedQuestionKeys.has(entry.key));
@@ -346,7 +386,9 @@ function subscribeRoom() {
 
 function describeSquare(square) {
   if (square === 0) return "起點";
-  if (square === FINISH) return "終點";
+  if (square === getFinishSquare()) return "終點";
+  if (isTrapSquare(square)) return `掉入陷阱（第 ${square} 格）`;
+  if (isGoldSquare(square)) return `金牌（第 ${square} 格）`;
   return `第 ${square} 格`;
 }
 
@@ -493,12 +535,78 @@ async function rollDice() {
 
   const dice = Math.floor(Math.random() * 6) + 1;
   const from = player.position;
-  const to = Math.min(FINISH, from + dice);
-  const questionEntry = getNextQuestion(to);
+  const to = Math.min(getFinishSquare(), from + dice);
 
   state.dice = dice;
   player.previousPosition = from;
   player.position = to;
+
+  if (isTrapSquare(to)) {
+    player.position = from;
+    state.pendingQuestion = null;
+    state.answerRevealed = false;
+    addTeacherLog(`${playerLabel(player)} 擲出 ${dice}，到${describeSquare(to)}，退回${describeSquare(from)}。`);
+    setMessage(`${playerLabel(player)} 掉入陷阱，退回前一次的位置：${describeSquare(from)}。`);
+    const nextPlayer = getNextPlayerAfter(player.id);
+    advanceTurn(player.id);
+
+    if (state.mode === "firebase") {
+      const batch = db.batch();
+      batch.set(getPlayersRef().doc(player.id), { position: from, previousPosition: from }, { merge: true });
+      batch.set(
+        getRoomRef(),
+        {
+          status: "playing",
+          currentPlayerId: nextPlayer?.id ?? null,
+          dice,
+          round: state.round,
+          pendingQuestion: null,
+          answerRevealed: false,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      await batch.commit();
+      await addRemoteAction("roll", `${playerLabel(player)} 掉入陷阱，退回前一次的位置。`);
+    }
+
+    render();
+    return;
+  }
+
+  if (isGoldSquare(to)) {
+    state.pendingQuestion = null;
+    state.answerRevealed = false;
+    addTeacherLog(`${playerLabel(player)} 擲出 ${dice}，到${describeSquare(to)}，免回答題目。`);
+    setMessage(`${playerLabel(player)} 取得金牌，免回答題目並留在${describeSquare(to)}。`);
+    const nextPlayer = getNextPlayerAfter(player.id);
+    advanceTurn(player.id);
+
+    if (state.mode === "firebase") {
+      const batch = db.batch();
+      batch.set(getPlayersRef().doc(player.id), { position: to, previousPosition: from }, { merge: true });
+      batch.set(
+        getRoomRef(),
+        {
+          status: "playing",
+          currentPlayerId: nextPlayer?.id ?? null,
+          dice,
+          round: state.round,
+          pendingQuestion: null,
+          answerRevealed: false,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      await batch.commit();
+      await addRemoteAction("roll", `${playerLabel(player)} 取得金牌，免回答題目。`);
+    }
+
+    render();
+    return;
+  }
+
+  const questionEntry = getNextQuestion(to);
 
   if (!questionEntry) {
     setMessage("本局題庫已全部使用，請重新開始一局。");
@@ -568,7 +676,7 @@ async function resolveQuestion(isCorrect) {
   const player = state.players.find((item) => item.id === pending.playerId) ?? state.players[pending.playerIndex];
 
   if (isCorrect) {
-    if (pending.to === FINISH) {
+    if (pending.to === getFinishSquare()) {
       state.winner = player;
       state.pendingQuestion = null;
       state.answerRevealed = false;
@@ -867,6 +975,9 @@ function renderSetupPlayers() {
 
 function renderBoard() {
   elements.board.innerHTML = "";
+  const { columns } = getActiveBoardConfig();
+  const finish = getFinishSquare();
+  elements.board.style.setProperty("--board-columns", columns);
 
   boardDisplayOrder().forEach((square) => {
     const cell = document.createElement("div");
@@ -875,19 +986,21 @@ function renderBoard() {
 
     cell.className = "board-cell";
     if (square === 0) cell.classList.add("start-cell");
-    if (square === FINISH) cell.classList.add("finish-cell");
+    if (square === finish) cell.classList.add("finish-cell");
+    if (isTrapSquare(square)) cell.classList.add("trap-cell");
+    if (isGoldSquare(square)) cell.classList.add("gold-cell");
     if (state.pendingQuestion?.to === square) cell.classList.add("active-cell");
 
     const label = document.createElement("span");
     label.className = "cell-number";
-    label.textContent = square === 0 ? "起點" : square === FINISH ? "終點" : String(square);
+    label.textContent = square === 0 ? "起點" : square === finish ? "終點" : String(square);
 
     const title = document.createElement("strong");
-    title.textContent = square === 0 ? "登入出發" : question?.unit ?? "歷史挑戰";
+    title.textContent = square === 0 ? "登入出發" : isTrapSquare(square) ? "掉入陷阱" : isGoldSquare(square) ? "金牌" : question?.unit ?? "歷史挑戰";
 
     const grade = document.createElement("span");
     grade.className = "cell-grade";
-    grade.textContent = square === 0 ? "START" : question?.grade ?? "";
+    grade.textContent = square === 0 ? "START" : isTrapSquare(square) ? "退回前一次位置" : isGoldSquare(square) ? "免回答題目" : question?.grade ?? "";
 
     const tokens = document.createElement("div");
     tokens.className = "tokens";
@@ -1017,7 +1130,8 @@ function renderStatus() {
   const isThisDeviceTurn = state.mode !== "firebase" || state.role === "teacher" || player?.id === state.devicePlayerId;
   elements.rollDice.disabled = Boolean(state.pendingQuestion || state.winner || !isThisDeviceTurn);
   const activeQuestions = getActiveQuestionBank();
-  elements.questionCount.textContent = `題庫 ${getActiveQuestionBankId()}｜已出題 ${state.usedQuestionKeys.size} / ${activeQuestions.length}`;
+  const usableQuestions = getUsableQuestions();
+  elements.questionCount.textContent = `題庫 ${getActiveQuestionBankId()}｜已出題 ${state.usedQuestionKeys.size} / ${usableQuestions.length}｜總題數 ${activeQuestions.length}`;
   const teacherControlDisabled = state.mode === "firebase" && state.role !== "teacher";
   elements.revealAnswer.disabled = !state.pendingQuestion || teacherControlDisabled;
   elements.markCorrect.disabled = !state.pendingQuestion || teacherControlDisabled;

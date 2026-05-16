@@ -781,7 +781,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-012",
-      square: 12,
+      square: 11,
       grade: "三下",
       unit: "以色列建國",
       question: "二戰後許多猶太人移居巴勒斯坦並建立以色列，與哪一歷史背景最有關？",
@@ -841,7 +841,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-018",
-      square: 18,
+      square: 17,
       grade: "三下",
       unit: "東南亞公約組織",
       question: "美國成立東南亞公約組織，希望把東南亞納入反共體系；但不少國家拒絕加入。這反映什麼？",
@@ -911,7 +911,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-025",
-      square: 25,
+      square: 24,
       grade: "三下",
       unit: "太空競賽",
       question: "1957 年蘇聯成功發射第一顆人造衛星史普尼克號，為何讓美國感到壓力？",
@@ -921,7 +921,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-026",
-      square: 26,
+      square: 1,
       grade: "三下",
       unit: "NASA 與登月",
       question: "美國成立太空總署並於 1969 年完成阿波羅 11 號登月，最能放在何種背景下理解？",
@@ -931,7 +931,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-027",
-      square: 27,
+      square: 2,
       grade: "三下",
       unit: "冷戰與生活",
       question: "電影《十月的天空》以冷戰太空競賽為背景，最能提醒我們哪一點？",
@@ -941,7 +941,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-028",
-      square: 28,
+      square: 4,
       grade: "三下",
       unit: "納粹政見",
       question: "希特勒政見中主張撕毀《凡爾賽條約》、擴充軍備與對外擴張。這最能反映哪一種政治傾向？",
@@ -951,7 +951,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-029",
-      square: 29,
+      square: 6,
       grade: "三下",
       unit: "納粹與經濟危機",
       question: "納粹黨在德國經濟困難、失業嚴重時獲得支持，最可能是因為它承諾什麼？",
@@ -961,7 +961,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-030",
-      square: 30,
+      square: 7,
       grade: "三下",
       unit: "種族迫害",
       question: "納粹主張猶太人是劣等種族並剝奪其權利。從歷史教訓看，這最應被理解為什麼？",
@@ -971,7 +971,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-031",
-      square: 31,
+      square: 9,
       grade: "三下",
       unit: "集中營反思",
       question: "討論集中營中被迫工作的猶太囚工時，最應注意哪一點？",
@@ -981,7 +981,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-032",
-      square: 32,
+      square: 11,
       grade: "三下",
       unit: "歷史素養",
       question: "若學生在活動中扮演納粹並引發國際抗議，最能反映哪一種歷史學習盲點？",
@@ -991,7 +991,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-033",
-      square: 33,
+      square: 13,
       grade: "三下",
       unit: "材料判讀",
       question: "若題目提供北約、華沙公約、馬歇爾計畫與柏林圍牆等線索，最合理的共同主題是什麼？",
@@ -1001,7 +1001,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-034",
-      square: 34,
+      square: 14,
       grade: "三下",
       unit: "時序整理",
       question: "下列事件依時間先後排列，哪一組最合理？",
@@ -1011,7 +1011,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-035",
-      square: 35,
+      square: 24,
       grade: "終點",
       unit: "戰後世界總整理",
       question: "若要用一句話統整第 4 課「戰後世界的局勢」，下列何者最適合？",
@@ -1131,7 +1131,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-047",
-      square: 25,
+      square: 24,
       grade: "三下",
       unit: "太空競賽",
       question: "史普尼克號引發美國重視科學教育與太空科技，最能說明冷戰競爭的哪一面向？",
@@ -1141,7 +1141,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-048",
-      square: 28,
+      square: 4,
       grade: "三下",
       unit: "納粹政見",
       question: "若一個政黨同時煽動民族仇恨、承諾解決失業、主張擴軍與排除特定族群，歷史上應警覺什麼？",
@@ -1151,7 +1151,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-049",
-      square: 30,
+      square: 7,
       grade: "三下",
       unit: "種族迫害",
       question: "學習納粹歷史時，為何不能只把納粹符號當作酷炫裝飾？",
@@ -1161,7 +1161,7 @@ window.questionBanks = {
     },
     {
       id: "hisgame01-050",
-      square: 33,
+      square: 13,
       grade: "三下",
       unit: "材料判讀",
       question: "若資料同時提到亞非會議、不結盟運動與第三世界，最適合判斷為哪一課文重點？",
@@ -1170,4 +1170,14 @@ window.questionBanks = {
       explanation: "亞非會議、第三世界與不結盟運動都與新興國家尋求自主有關。",
     },
   ],
+};
+
+window.boardConfigs = {
+  ...(window.boardConfigs ?? {}),
+  HISGAME01: {
+    size: 25,
+    columns: 5,
+    trapSquares: [12],
+    goldSquares: [18],
+  },
 };
