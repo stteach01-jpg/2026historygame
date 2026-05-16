@@ -11,7 +11,8 @@
 - 零依賴，不需要 npm install
 - 36 格棋盤，支援 1-6 位玩家
 - 玩家代號格式如 `902-02`，不記錄姓名
-- 題庫涵蓋國中歷史一上到三下，目前 70 題
+- 預設題庫涵蓋國中歷史一上到三下，目前 70 題
+- 基地 `HISGAME01` 使用「3 下第 4 課：戰後世界的局勢」專屬題庫，目前 50 題
 - 每局比賽已出過的題目不會重複
 - 題目包含資料判讀、因果推論、時序整理與跨單元比較
 - 教師後台可顯示答案、手動判定答對/答錯、略過題目與查看課堂紀錄
@@ -38,7 +39,7 @@ Authentication 的 Anonymous provider 已啟用。Firestore rules 已部署為�
 教師端：
 
 1. 開啟遊戲網址。
-2. 確認基地代碼，例如 `HISGAME`。
+2. 確認基地代碼，例如 `HISGAME`；若要使用「戰後世界的局勢」專屬題庫，請輸入 `HISGAME01`。
 3. 按「教師建立基地」。
 4. 等學生用同一基地代碼加入。
 5. 按「開始遊戲」。
@@ -77,6 +78,6 @@ Authentication 的 Anonymous provider 已啟用。Firestore rules 已部署為�
 - `index.html`: 遊戲畫面結構
 - `src/main.js`: 登入、擲骰、棋盤、答題與勝負流程
 - `src/firebase-config.js`: Firebase Web 設定
-- `src/data/questions.js`: 36 格歷史題庫
+- `src/data/questions.js`: 36 格歷史題庫與基地專屬題庫
 - `src/styles.css`: 介面樣式
 - `firestore.rules`: Firestore 基地同步規則

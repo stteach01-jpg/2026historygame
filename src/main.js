@@ -1,7 +1,11 @@
 const BOARD_SIZE = 36;
 const FINISH = BOARD_SIZE - 1;
 const PLAYER_COLORS = ["#d94f30", "#1f6f8b", "#5f5aa2", "#317b22", "#b45f06", "#7a3e75"];
-const boardQuestions = window.boardQuestions;
+const defaultBoardQuestions = window.boardQuestions ?? [];
+const questionBanks = {
+  HISGAME: defaultBoardQuestions,
+  ...(window.questionBanks ?? {}),
+};
 const firebaseConfig = window.historyGameFirebaseConfig;
 const firebaseReady = Boolean(window.firebase && firebaseConfig);
 const firebaseApp = firebaseReady ? firebase.initializeApp(firebaseConfig) : null;
@@ -95,8 +99,23 @@ function boardDisplayOrder() {
   return rows.flat();
 }
 
+function getQuestionBankId(baseCode = state.roomCode) {
+  const normalized = normalizeRoomCode(baseCode || elements.roomCode?.value || "HISGAME");
+  return questionBanks[normalized] ? normalized : "HISGAME";
+}
+
+function getActiveQuestionBank() {
+  const bankId = state.roomData?.questionBankId ?? getQuestionBankId();
+  return questionBanks[bankId] ?? defaultBoardQuestions;
+}
+
+function getActiveQuestionBankId() {
+  const bankId = state.roomData?.questionBankId ?? getQuestionBankId();
+  return questionBanks[bankId] ? bankId : "HISGAME";
+}
+
 function getQuestion(square) {
-  return boardQuestions.find((question) => question.square === square);
+  return getActiveQuestionBank().find((question) => question.square === square);
 }
 
 function questionKey(question, index) {
@@ -104,14 +123,15 @@ function questionKey(question, index) {
 }
 
 function getNextQuestion(square) {
-  const exactSquareCandidates = boardQuestions
+  const activeQuestions = getActiveQuestionBank();
+  const exactSquareCandidates = activeQuestions
     .map((question, index) => ({ question, key: questionKey(question, index) }))
     .filter((entry) => entry.question.square === square && !state.usedQuestionKeys.has(entry.key));
 
   const candidates =
     exactSquareCandidates.length > 0
       ? exactSquareCandidates
-      : boardQuestions
+      : activeQuestions
           .map((question, index) => ({ question, key: questionKey(question, index) }))
           .filter((entry) => !state.usedQuestionKeys.has(entry.key));
 
@@ -224,6 +244,7 @@ async function connectRoom(role, createIfMissing = false) {
   }
 
   const roomCode = normalizeRoomCode(elements.roomCode.value);
+  const questionBankId = getQuestionBankId(roomCode);
   elements.roomCode.value = roomCode;
   state.mode = "firebase";
   state.role = role;
@@ -250,14 +271,23 @@ async function connectRoom(role, createIfMissing = false) {
       pendingQuestion: null,
       answerRevealed: false,
       nextJoinOrder: 0,
+      questionBankId,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
+  } else if (questionBanks[roomCode] && roomSnapshot.data()?.questionBankId !== questionBankId) {
+    await roomRef.set(
+      {
+        questionBankId,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
   }
 
   subscribeRoom();
   setRoomStatus(`${role === "teacher" ? "教師" : "學生"}已連線基地 ${roomCode}`);
-  setMessage(`已連線基地 ${roomCode}。`);
+  setMessage(`已連線基地 ${roomCode}，題庫：${getActiveQuestionBankId()}。`);
 }
 
 function disconnectRoom() {
@@ -437,6 +467,7 @@ async function startGame() {
         round: 1,
         pendingQuestion: null,
         answerRevealed: false,
+        questionBankId: getActiveQuestionBankId(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true },
@@ -727,6 +758,7 @@ async function resetRoomGame(clearPlayers) {
         pendingQuestion: null,
         answerRevealed: false,
         nextJoinOrder: clearPlayers ? 0 : state.roomData?.nextJoinOrder ?? state.players.length,
+        questionBankId: getActiveQuestionBankId(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true },
@@ -984,7 +1016,8 @@ function renderStatus() {
   elements.positionLabel.textContent = player ? `位置：${describeSquare(player.position)}` : "位置：起點";
   const isThisDeviceTurn = state.mode !== "firebase" || state.role === "teacher" || player?.id === state.devicePlayerId;
   elements.rollDice.disabled = Boolean(state.pendingQuestion || state.winner || !isThisDeviceTurn);
-  elements.questionCount.textContent = `已出題 ${state.usedQuestionKeys.size} / ${boardQuestions.length}`;
+  const activeQuestions = getActiveQuestionBank();
+  elements.questionCount.textContent = `題庫 ${getActiveQuestionBankId()}｜已出題 ${state.usedQuestionKeys.size} / ${activeQuestions.length}`;
   const teacherControlDisabled = state.mode === "firebase" && state.role !== "teacher";
   elements.revealAnswer.disabled = !state.pendingQuestion || teacherControlDisabled;
   elements.markCorrect.disabled = !state.pendingQuestion || teacherControlDisabled;
